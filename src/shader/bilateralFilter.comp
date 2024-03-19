@@ -1,0 +1,68 @@
+/***********************************************************************
+ * @file	bilateralFilter.comp
+ * @author	jjyou
+ * @date	2024-3-19
+ * @brief	This file implements bilateral filter algorithm for raw depth maps.
+***********************************************************************/
+
+#version 450
+
+layout (local_size_x = 32, local_size_y = 32) in;
+
+/** @brief	Input image.
+  * 
+  * The input depth image which uses 0 or NaN to indicate an invalid depth value.
+  */
+layout (set = 0, binding = 0, r32f) uniform readonly image2D inputImage;
+
+/** @brief	Output image.
+  * 
+  * The output depth image which uses 0 to indicate an invalid depth value.
+  * It should have the same size as the input image.
+  */
+layout (set = 0, binding = 1, r32f) uniform image2D outputImage;
+
+/** @brief	Bilateral filter parameters.
+  */
+layout(push_constant) uniform BilateralFilterParam {
+	float sigmaColor;	//!< The sigma value controlling the color term.
+	float sigmaSpace;	//!< The sigma value controlling the space term.
+	int d;				//!< The diameter of the filter area. It should be an odd number.
+} bilateralFilterParam;
+
+/** @brief	Helper function to compute `x*x`.
+  */
+float square(float x) {
+	return x * x;
+}
+
+void main() {
+	ivec2 centerPixelPos = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
+	ivec2 iSize = imageSize(inputImage);
+	if (centerPixelPos.x >= iSize.x || centerPixelPos.y >= iSize.y)
+		return;
+	float centerPixel = imageLoad(inputImage, centerPixelPos).r;
+	if (isnan(centerPixel) || centerPixel == 0.0) {
+		imageStore(outputImage, centerPixelPos, vec4(0.0));
+		return;
+	}
+	float coeffColor = -0.5 / square(bilateralFilterParam.sigmaColor);
+	float coeffSpace = -0.5 / square(bilateralFilterParam.sigmaSpace);
+	int r = bilateralFilterParam.d / 2;
+	ivec2 xRange = ivec2(max(0, centerPixelPos.x - r), min(iSize.x - 1, centerPixelPos.x + r));
+	ivec2 yRange = ivec2(max(0, centerPixelPos.y - r), min(iSize.y - 1, centerPixelPos.y + r));
+	float sumValue = 0.0;
+	float sumWeight = 0.0;
+	for (int x = xRange[0]; x <= xRange[1]; ++x)
+		for (int y = yRange[0]; y <= yRange[1]; ++y) {
+			ivec2 inputPixelPos = ivec2(x, y);
+			float inputPixel = imageLoad(inputImage, inputPixelPos).r;
+			if (isnan(inputPixel) || inputPixel == 0.0)
+				continue;
+			float weightColor = exp(coeffColor * square(centerPixel - inputPixel));
+			float weightSpace = exp(coeffSpace * square(length(centerPixelPos - inputPixelPos)));
+			sumWeight += weightSpace * weightColor;
+			sumValue += weightSpace * weightColor * inputPixel;
+		}
+	imageStore(outputImage, centerPixelPos, vec4(sumValue / sumWeight));
+}
