@@ -1,6 +1,10 @@
+#include "Window.hpp"
 #include "Engine.hpp"
-#include <jjyou/io/Json.hpp>
-#include <jjyou/geo/HalfedgeMesh.hpp>
+#include "KinectFusion.hpp"
 int main() {
-	Engine engine(false, true);
+	Engine engine(true);
+	Window window;
+	window.createWindow(800, 600);
+	engine.createContext();
+	window.createSurface(engine.context().instance());
 }

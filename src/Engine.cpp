@@ -1,25 +1,23 @@
 #include "Engine.hpp"
 #include <iostream>
+#include <GLFW/glfw3.h>
 
-Engine::Engine(bool headless, bool validation) : context(nullptr) {
-	glfwInit();
+void Engine::createContext(void) {
 	jjyou::vk::ContextBuilder contextBuilder;
 	contextBuilder
-		.enableValidation(validation)
-		.headless(headless)
+		.enableValidation(this->_debugMode)
+		.headless(false)
 		.applicationName("KinectFusion-Vulkan")
 		.applicationVersion(0U, 1U, 0U, 0U)
 		.engineName("KinectFusion-Vulkan")
 		.engineVersion(0U, 1U, 0U, 0U)
 		.apiVersion(0U, 1U, 0U, 0U);
-	if (validation)
+	if (this->_debugMode)
 		contextBuilder.useDefaultDebugUtilsMessenger();
-	if (!headless) {
-		std::uint32_t count{};
-		const char** glfwRequiredExtensions = glfwGetRequiredInstanceExtensions(&count);
-		contextBuilder.enableInstanceExtensions(glfwRequiredExtensions, glfwRequiredExtensions + count);
-	}
-	contextBuilder.buildInstance(this->context);
-	contextBuilder.selectPhysicalDevice(this->context);
-	contextBuilder.buildDevice(this->context);
+	std::uint32_t glfwRequiredExtensionCount{};
+	const char** glfwRequiredExtensions = glfwGetRequiredInstanceExtensions(&glfwRequiredExtensionCount);
+	contextBuilder.enableInstanceExtensions(glfwRequiredExtensions, glfwRequiredExtensions + glfwRequiredExtensionCount);
+	contextBuilder.buildInstance(this->_context);
+	contextBuilder.selectPhysicalDevice(this->_context);
+	contextBuilder.buildDevice(this->_context);
 }
