@@ -2,9 +2,11 @@
 #include "Engine.hpp"
 #include "KinectFusion.hpp"
 int main() {
-	Engine engine(true);
-	Window window;
-	window.createWindow(800, 600);
-	engine.createContext();
-	window.createSurface(engine.context().instance());
+	Engine engine(false, true);
+	while (!engine.window().windowShouldClose()) {
+		engine.prepareFrame();
+		engine.recordCommandBuffersDemo();
+		engine.presentFrame();
+		engine.window().pollEvents();
+	}
 }

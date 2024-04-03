@@ -7,7 +7,9 @@ class Application {
 
 public:
 
+	Application(void) {
 
+	}
 
 private:
 

@@ -17,11 +17,11 @@ public:
 	Window& operator=(Window&&) = delete;
 	~Window(void);
 
-	void createWindow(int width_, int height_);
+	void createWindow(int width_, int height_, const char* title_);
 
-	void createSurface(const jjyou::vk::Context& context_);
+	static std::vector<const char*> getRequiredInstanceExtensions(void);
 
-	void setupUI(const jjyou::vk::Context& context_);
+	void createSurface(const vk::raii::Instance& instance_);
 
 	void resetSceneViewer(void) {
 		this->_sceneViewer.reset();
@@ -35,8 +35,12 @@ public:
 	}
 
 	GLFWwindow* glfwWindow(void) const { return this->_glfwWindow; }
-
 	const vk::raii::SurfaceKHR& surface(void) const { return this->_surface; }
+
+	std::pair<int, int> framebufferSize(void) const { int width{}, height{}; glfwGetFramebufferSize(this->_glfwWindow, &width, &height); return std::make_pair(width, height); }
+	static void waitEvents(void) { glfwWaitEvents(); }
+	static void pollEvents(void) { glfwPollEvents(); }
+	int windowShouldClose(void) const { return glfwWindowShouldClose(this->_glfwWindow); }
 
 private:
 

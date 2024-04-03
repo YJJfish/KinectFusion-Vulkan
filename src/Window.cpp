@@ -1,9 +1,13 @@
 #include "Window.hpp"
+#include <imgui.h>
+#include <backends/imgui_impl_glfw.h>
+#include <backends/imgui_impl_vulkan.h>
 
 std::size_t Window::_numGLFWWindows = 0;
 
 Window::~Window(void) {
 	if (this->_glfwWindow != nullptr) {
+		this->_surface.~SurfaceKHR();
 		glfwDestroyWindow(this->_glfwWindow);
 		this->_glfwWindow = nullptr;
 		--Window::_numGLFWWindows;
@@ -12,11 +16,11 @@ Window::~Window(void) {
 	}
 }
 
-void Window::createWindow(int width_, int height_) {
+void Window::createWindow(int width_, int height_, const char* title_) {
 	if (Window::_numGLFWWindows == 0)
 		glfwInit();
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	this->_glfwWindow = glfwCreateWindow(width_, height_, "KinectFusion-Vulkan", nullptr, nullptr);
+	this->_glfwWindow = glfwCreateWindow(width_, height_, title_, nullptr, nullptr);
 	glfwSetWindowUserPointer(this->_glfwWindow, this);
 	glfwSetFramebufferSizeCallback(this->_glfwWindow, Window::_framebufferResizeCallbackDelegate);
 	glfwSetMouseButtonCallback(this->_glfwWindow, Window::_mouseButtonCallbackDelegate);
@@ -27,40 +31,16 @@ void Window::createWindow(int width_, int height_) {
 	++Window::_numGLFWWindows;
 }
 
-void Window::createSurface(const jjyou::vk::Context& context_) {
-	VkSurfaceKHR surface{};
-	glfwCreateWindowSurface(*context_.instance(), this->_glfwWindow, nullptr, &surface);
-	this->_surface = vk::raii::SurfaceKHR(context_.instance(), surface);
+std::vector<const char*> Window::getRequiredInstanceExtensions(void) {
+	std::uint32_t glfwRequiredInstanceExtensionCount{};
+	const char** glfwRequiredInstanceExtensions = glfwGetRequiredInstanceExtensions(&glfwRequiredInstanceExtensionCount);
+	return std::vector<const char*>(glfwRequiredInstanceExtensions, glfwRequiredInstanceExtensions + glfwRequiredInstanceExtensionCount);
 }
 
-void Window::setupUI(const jjyou::vk::Context& context_) {
-	IMGUI_CHECKVERSION();
-	ImGui::CreateContext();
-	ImGuiIO& io = ImGui::GetIO(); (void)io;
-	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
-
-	// Setup Dear ImGui style
-	ImGui::StyleColorsDark();
-	//ImGui::StyleColorsLight();
-
-	// Setup Platform/Renderer backends
-	ImGui_ImplGlfw_InitForVulkan(window, true);
-	ImGui_ImplVulkan_InitInfo init_info = {};
-	init_info.Instance = g_Instance;
-	init_info.PhysicalDevice = g_PhysicalDevice;
-	init_info.Device = g_Device;
-	init_info.QueueFamily = g_QueueFamily;
-	init_info.Queue = g_Queue;
-	init_info.PipelineCache = g_PipelineCache;
-	init_info.DescriptorPool = g_DescriptorPool;
-	init_info.Subpass = 0;
-	init_info.MinImageCount = g_MinImageCount;
-	init_info.ImageCount = wd->ImageCount;
-	init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
-	init_info.Allocator = g_Allocator;
-	init_info.CheckVkResultFn = check_vk_result;
-	ImGui_ImplVulkan_Init(&init_info, wd->RenderPass);
+void Window::createSurface(const vk::raii::Instance& instance_) {
+	VkSurfaceKHR surface{};
+	glfwCreateWindowSurface(*instance_, this->_glfwWindow, nullptr, &surface);
+	this->_surface = vk::raii::SurfaceKHR(instance_, surface);
 }
 
 void Window::_framebufferResizeCallbackDelegate(GLFWwindow* glfwWindow_, int width_, int height_) {
@@ -72,6 +52,8 @@ void Window::_framebufferResizeCallback(int width_, int height_) {
 }
 
 void Window::_mouseButtonCallbackDelegate(GLFWwindow* glfwWindow_, int button_, int action_, int mods_) {
+	if (ImGui::GetIO().WantCaptureMouse)
+		return;
 	Window* window = reinterpret_cast<Window*>(glfwGetWindowUserPointer(glfwWindow_));
 	window->_mouseButtonCallback(button_, action_, mods_);
 }
@@ -107,6 +89,8 @@ void Window::_cursorPosCallback(double xPos_, double yPos_) {
 }
 
 void Window::_scrollCallbackDelegate(GLFWwindow* glfwWindow_, double xOffset_, double yOffset_) {
+	if (ImGui::GetIO().WantCaptureMouse)
+		return;
 	Window* window = reinterpret_cast<Window*>(glfwGetWindowUserPointer(glfwWindow_));
 	window->_scrollCallback(xOffset_, yOffset_);
 }
@@ -118,6 +102,8 @@ void Window::_scrollCallback(double xOffset_, double yOffset_) {
 }
 
 void Window::_keyCallbackDelegate(GLFWwindow* glfwWindow_, int key_, int scancode_, int action_, int mods_) {
+	if (ImGui::GetIO().WantCaptureKeyboard)
+		return;
 	Window* window = reinterpret_cast<Window*>(glfwGetWindowUserPointer(glfwWindow_));
 	window->_keyCallback(key_, scancode_, action_, mods_);
 }
