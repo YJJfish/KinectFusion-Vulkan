@@ -1,0 +1,25 @@
+/***********************************************************************
+ * @file	rayCasting.comp
+ * @author	jjyou
+ * @date	2024-4-3
+ * @brief	This file implements ray casting algorithm.
+***********************************************************************/
+
+#version 450
+
+layout (local_size_x = 32, local_size_y = 32) in;
+
+/** @brief	Input TSDF volume.
+  * 
+  * A storage buffer containing all information about the TSDF volume.
+  */
+layout(set = 0, binding = 0) readonly buffer TSDFVolume {
+	uvec3 resolution;
+	float size;
+	vec3 corner;
+	float truncationDistance;
+	vec2 data[];
+} tsdfVolume;
+
+void main(){
+}

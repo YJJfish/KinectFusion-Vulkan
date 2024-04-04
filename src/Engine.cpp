@@ -137,7 +137,7 @@ void Engine::_createContext(void) {
 	contextBuilder.requestPhysicalDeviceType(vk::PhysicalDeviceType::eDiscreteGpu);
 	if (!this->_headlessMode) {
 		this->_window.createSurface(this->_context.instance());
-		contextBuilder.addSurface(*this->_window.surface());
+		contextBuilder.addSurface(this->_window.surface());
 	}
 	contextBuilder.selectPhysicalDevice(this->_context);
 	// Device
@@ -176,7 +176,7 @@ void Engine::_createCommandPools(void) {
 }
 
 void Engine::_createSwapchain(void) {
-	jjyou::vk::SwapchainBuilder builder(this->_context, *this->_window.surface());
+	jjyou::vk::SwapchainBuilder builder(this->_context, this->_window.surface());
 	builder
 		.requestSurfaceFormat(VkSurfaceFormatKHR{ .format = VK_FORMAT_B8G8R8A8_SRGB , .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR })
 		.requestPresentMode(::vk::PresentModeKHR::eMailbox);

@@ -2,7 +2,6 @@
 #include <vulkan/vulkan_raii.hpp>
 #include <GLFW/glfw3.h>
 #include <jjyou/vk/Vulkan.hpp>
-#define JJYOU_USE_VULKAN
 #include <jjyou/vis/CameraView.hpp>
 #include <chrono>
 

@@ -26,6 +26,7 @@ public:
 	const vk::raii::DescriptorSetLayout& viewLevelDescriptorSetLayout(void) const { return this->_viewLevelDescriptorSetLayout; }
 	const vk::raii::DescriptorSetLayout& instanceLevelDescriptorSetLayout(void) const { return this->_instanceLevelDescriptorSetLayout; }
 	const vk::raii::DescriptorSetLayout& imageDescriptorSetLayout(void) const { return this->_imageDescriptorSetLayout; }
+	const vk::raii::DescriptorPool& descriptorPool(void) const { return this->_descriptorPool; }
 
 	struct FrameData {
 		vk::raii::Fence inFlightFence{ nullptr };
