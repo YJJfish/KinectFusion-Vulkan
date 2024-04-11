@@ -28,6 +28,8 @@ vec3 getInPosition(float inDepth) {
 
 void main() {
 	vec4 inColor = texture(surfaceColorTexture, inTexCoord);
+	if (inColor.a <= 0.5)
+		discard;
 	float inDepth = texture(surfaceDepthTexture, inTexCoord).r;
 	vec3 inPosition = getInPosition(inDepth);
 	outColor = inColor;

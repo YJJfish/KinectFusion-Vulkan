@@ -16,7 +16,7 @@ TSDFVolume::TSDFVolume(
 	_pEngine(&engine_),
 	_resolution(resolution_),
 	_size(size_),
-	_corner(corner_.has_value() ? (*corner_) : (resolution_.cast<float>() * size_ / 2.0f)),
+	_corner(corner_.has_value() ? (*corner_) : ((-resolution_ + 1U).cast<float>() * size_ / 2.0f)),
 	_truncationDistance(truncationDistance_.has_value() ? (*truncationDistance_) : (3.0f * size_)),
 	_bufferSize(32 + 8 * this->_resolution.x * this->_resolution.y * this->_resolution.z)
 {

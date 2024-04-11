@@ -3,7 +3,7 @@
  * @author	jjyou
  * @date	2024-4-8
  * @brief	This file implements the fragment shader for displaying a lambertian
- *			surface that have color, normal and depth textures.
+ *			surface that have color, depth and normal textures.
 ***********************************************************************/
 
 #version 450
@@ -29,6 +29,8 @@ vec3 getInPosition(float inDepth) {
 
 void main() {
 	vec4 inColor = texture(surfaceColorTexture, inTexCoord);
+	if (inColor.a <= 0.5)
+		discard;
 	vec3 inNormal = texture(surfaceNormalTexture, inTexCoord).rgb;
 	float inDepth = texture(surfaceDepthTexture, inTexCoord).r;
 	vec3 inPosition = getInPosition(inDepth);

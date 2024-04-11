@@ -26,8 +26,9 @@ public:
 	  * @param	engine_					Vulkan engine.
 	  * @param	resolution_				Voxel resolution.
 	  * @param	size_					Voxel size, in meter.
-	  * @param	corner_					Volume corner. By default, the volume will be placed
-	  *									such that its center point is at the origin.
+	  * @param	corner_					The coordinate of the corner voxel's center point.
+	  *									By default, the volume will be placed such that
+	  *									its center point is at the origin.
 	  * @param	truncationDistance_		Truncation distance. By default, it is 3x the voxel size.
 	  */
 	TSDFVolume(

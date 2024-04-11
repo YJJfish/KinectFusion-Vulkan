@@ -16,3 +16,13 @@ KinectFusion::KinectFusion(
 {
 
 }
+
+void KinectFusion::rayCasting(
+	const Surface<Lambertian>& surface_,
+	const jjyou::glsl::mat3& projection_,
+	const jjyou::glsl::mat4& view_,
+	std::optional<float> marchingStep_,
+	std::optional<float> invalidDepth_
+) const {
+
+}
