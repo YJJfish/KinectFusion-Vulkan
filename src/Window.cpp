@@ -16,7 +16,7 @@ Window::~Window(void) {
 	}
 }
 
-void Window::createWindow(int width_, int height_, const char* title_) {
+Window::Window(int width_, int height_, const char* title_) {
 	if (Window::_numGLFWWindows == 0)
 		glfwInit();
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);

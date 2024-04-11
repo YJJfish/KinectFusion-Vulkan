@@ -2,13 +2,16 @@
 #include <vulkan/vulkan_raii.hpp>
 #include <jjyou/vk/Vulkan.hpp>
 #include "Window.hpp"
+#include "Primitives.hpp"
+#include "Texture.hpp"
+#include "DescriptorSet.hpp"
 
 class Engine {
 
 public:
 
 	static inline constexpr std::uint32_t NUM_FRAMES_IN_FLIGHT = 2;
-
+	
 	Engine(bool headlessMode_, bool debugMode_);
 	Engine(const Engine&) = delete;
 	Engine(Engine&&) = delete;
@@ -23,34 +26,78 @@ public:
 	const Window& window(void) const { return this->_window; }
 	const vk::raii::CommandPool& commandPool(jjyou::vk::Context::QueueType queueType_) const { return this->_commandPools[queueType_]; }
 	const vk::raii::CommandPool& commandPool(std::size_t queueType_) const { return this->_commandPools[queueType_]; }
-	const vk::raii::DescriptorSetLayout& viewLevelDescriptorSetLayout(void) const { return this->_viewLevelDescriptorSetLayout; }
-	const vk::raii::DescriptorSetLayout& instanceLevelDescriptorSetLayout(void) const { return this->_instanceLevelDescriptorSetLayout; }
-	const vk::raii::DescriptorSetLayout& imageDescriptorSetLayout(void) const { return this->_imageDescriptorSetLayout; }
 	const vk::raii::DescriptorPool& descriptorPool(void) const { return this->_descriptorPool; }
 
-	struct FrameData {
-		vk::raii::Fence inFlightFence{ nullptr };
-		vk::raii::Semaphore imageAvailableSemaphore{ nullptr };
-		vk::raii::Semaphore renderFinishedSemaphore{ nullptr };
-		std::array<vk::raii::CommandBuffer, jjyou::vk::Context::NumQueueTypes> commandBuffer{ { vk::raii::CommandBuffer{nullptr},vk::raii::CommandBuffer{nullptr},vk::raii::CommandBuffer{nullptr} } };
-	};
+	/** @brief	Create a `Primitives` instance.
+	  */
+	template <MaterialType _materialType, PrimitiveType _primitiveType>
+	Primitives<_materialType, _primitiveType> createPrimitives(void) {
+		return Primitives<_materialType, _primitiveType>(*this);
+	}
+
+	/** @brief	Create a `Surface` instance.
+	  */
+	template <MaterialType _materialType>
+	Surface<_materialType> createSurface(void) {
+		return Surface<_materialType>(*this, this->_surfaceSamplerDescriptorSetLayouts[_materialType], this->_surfaceStorageDescriptorSetLayouts[_materialType]);
+	}
+
+	/** @brief	Prepare a new frame. Call this function before rendering.
+	  * @return	The Vulkan result of acquiring a new image from the swapchain.
+	  *			If the result is `vk::Result::eErrorOutOfDateKHR`, you should skip
+	  *			this frame.
+	  */
 	vk::Result prepareFrame(void);
-	const FrameData& activeFrameData(void) const { return this->_framesInFlight[static_cast<std::size_t>(this->_frameIndex)]; }
-	const vk::raii::Framebuffer& activeFramebuffer(void) const { return this->_framebuffers[static_cast<std::size_t>(this->_swapchainImageIndex)]; }
+
+	/** @brief	Add a Primitives to draw.
+	  */
+	template<MaterialType materialType, PrimitiveType primitiveType>
+	void drawPrimitives(
+		const Primitives<materialType, primitiveType>& primitives_,
+		const jjyou::glsl::mat4& modelMatrix_
+	) {
+		this->_getPrimitivesToDraw<materialType, primitiveType>().emplace_back(
+			&primitives_,
+			modelMatrix_,
+			jjyou::glsl::transpose(jjyou::glsl::inverse(modelMatrix_))
+		);
+	}
+
+	/** @brief	Add a Surface to draw.
+	  */
+	template<MaterialType materialType>
+	void drawSurface(
+		const Surface<materialType>& surface_
+	) {
+		this->_getSurfacesToDraw<materialType>().push_back(&surface_);
+	}
+
+	/** @brief	Record the command buffer. Call this function after sending all instances
+	  *			to draw to the engine via `Engine::drawPrimitives` and `Engine::drawSurface`.
+	  */
+	void recordCommandbuffer(void) const;
+
+	/** @brief	Present the current frame. Call this function after recording the command buffer.
+	  */
 	vk::Result presentFrame(void);
 
-	void recordCommandBuffersDemo(void);
-
+	
+	
+	/** @brief	Wait all queues to be idle.
+	  */
+	void waitIdle(void) const;
 
 private:
 
 	bool _headlessMode;
+
 	bool _debugMode;
 	
 	jjyou::vk::Context _context{ nullptr };
+
 	jjyou::vk::VmaAllocator _allocator{ nullptr };
 	
-	Window _window{};
+	Window _window{ nullptr };
 	
 	std::array<vk::raii::CommandPool, jjyou::vk::Context::NumQueueTypes> _commandPools{ { vk::raii::CommandPool{nullptr},vk::raii::CommandPool{nullptr},vk::raii::CommandPool{nullptr} } };
 	
@@ -58,40 +105,140 @@ private:
 
 	vk::raii::RenderPass _renderPass{ nullptr };
 
-	vk::raii::Image _depthImage{ nullptr };
-	jjyou::vk::VmaAllocation _depthImageMemory{ nullptr };
-	vk::raii::ImageView _depthImageView{ nullptr };
+	Texture2D _depthImage{ nullptr };
 
 	std::vector<vk::raii::Framebuffer> _framebuffers;
-
+	
+	// View level descriptor set layout, including camera parameters
 	vk::raii::DescriptorSetLayout _viewLevelDescriptorSetLayout{ nullptr };
-	vk::raii::DescriptorSetLayout _instanceLevelDescriptorSetLayout{ nullptr };
-	vk::raii::DescriptorSetLayout _imageDescriptorSetLayout{ nullptr };
 
+	// Instance level descriptor set layout, including model and normal matrices
+	vk::raii::DescriptorSetLayout _instanceLevelDescriptorSetLayout{ nullptr };
+
+	// Descriptor set layouts for drawing a quad to display a surface
+	std::array<vk::raii::DescriptorSetLayout, MaterialType::NumMaterialTypes> _surfaceSamplerDescriptorSetLayouts{ { vk::raii::DescriptorSetLayout{nullptr}, vk::raii::DescriptorSetLayout{nullptr} } };
+	std::array<vk::raii::DescriptorSetLayout, MaterialType::NumMaterialTypes> _surfaceStorageDescriptorSetLayouts{ { vk::raii::DescriptorSetLayout{nullptr}, vk::raii::DescriptorSetLayout{nullptr} } };
+
+	// Descriptor pool. Over-allocated for simplicity.
 	vk::raii::DescriptorPool _descriptorPool{ nullptr };
 
-	// Pipeline layout for drawing simple primitives
-	vk::raii::PipelineLayout _simplePipelineLayout{ nullptr };
+	// Pipelines layouts for drawing primitives
+	std::array<vk::raii::PipelineLayout, MaterialType::NumMaterialTypes> _primitivePipelineLayouts{ { vk::raii::PipelineLayout{nullptr}, vk::raii::PipelineLayout{nullptr} } };
 
-	// Pipeline layout for drawing lambertian primitives
-	vk::raii::PipelineLayout _lambertianPipelineLayout{ nullptr };
+	// Pipeline layouts for drawing a quad to display a surface
+	std::array<vk::raii::PipelineLayout, MaterialType::NumMaterialTypes> _surfacePipelineLayouts{ { vk::raii::PipelineLayout{nullptr}, vk::raii::PipelineLayout{nullptr} } };
 
-	// Pipeline layout for drawing a quad to display images
-	vk::raii::PipelineLayout _imagePipelineLayout{ nullptr };
+	// Pipelines for drawing scene primitives
+	std::array<std::array<vk::raii::Pipeline, PrimitiveType::NumPrimitiveTypes>, MaterialType::NumMaterialTypes> _primitivePipelines{ {
+		{ { vk::raii::Pipeline{nullptr}, vk::raii::Pipeline{nullptr}, vk::raii::Pipeline{nullptr} } },
+		{ { vk::raii::Pipeline{nullptr}, vk::raii::Pipeline{nullptr}, vk::raii::Pipeline{nullptr} } }
+	} };
 
-	// Pipeline for drawing simple lines
-	vk::raii::Pipeline _simpleLinePipeline{ nullptr };
+	// Pipelines for drawing a quad to display a surface
+	std::array<vk::raii::Pipeline, MaterialType::NumMaterialTypes> _surfacePipelines{ { vk::raii::Pipeline{nullptr}, vk::raii::Pipeline{nullptr} } };
 
-	// Pipeline for drawing lambertian triangles
-	vk::raii::Pipeline _lambertianTrianglePipeline{ nullptr };
-
-	// Pipeline for drawing a quad to display images
-	vk::raii::Pipeline _imagePipeline{ nullptr };
-
-	std::array<FrameData, static_cast<std::size_t>(Engine::NUM_FRAMES_IN_FLIGHT)> _framesInFlight;
+	// Frame data
+	struct _FrameData {
+		vk::raii::Fence inFlightFence{ nullptr };
+		vk::raii::Semaphore imageAvailableSemaphore{ nullptr };
+		vk::raii::Semaphore renderFinishedSemaphore{ nullptr };
+		vk::raii::CommandBuffer graphicsCommandBuffer{ nullptr };
+		ViewLevelDescriptorSet viewLevelDescriptorSet{ nullptr };
+		InstanceLevelDescriptorSet instanceLevelDescriptorSet{ nullptr };
+	};
+	std::array<_FrameData, static_cast<std::size_t>(Engine::NUM_FRAMES_IN_FLIGHT)> _framesInFlight;
 	std::uint32_t _swapchainImageIndex = 0;
 	std::uint32_t _frameIndex = 0;
+	const _FrameData& _activeFrameData(void) const { return this->_framesInFlight[static_cast<std::size_t>(this->_frameIndex)]; }
+	const vk::raii::Framebuffer& _activeFramebuffer(void) const { return this->_framebuffers[static_cast<std::size_t>(this->_swapchainImageIndex)]; }
 
+	// Render resources
+	/// Primitives
+	template<MaterialType _materialType, PrimitiveType _primitiveType>
+	struct _PrimitivesToDraw {
+		const Primitives<_materialType, _primitiveType>* pPrimitives = nullptr;
+		jjyou::glsl::mat4 modelMatrix{ 1.0f };
+		jjyou::glsl::mat4 normalMatrix{ 1.0f };
+	};
+	template<MaterialType _materialType, PrimitiveType _primitiveType>
+	std::vector<_PrimitivesToDraw<_materialType, _primitiveType>>&
+		_getPrimitivesToDraw(void);
+	template<MaterialType _materialType, PrimitiveType _primitiveType>
+	const std::vector <_PrimitivesToDraw<_materialType, _primitiveType>>&
+		_getPrimitivesToDraw(void) const;
+	//// Simple points
+	std::vector<_PrimitivesToDraw<MaterialType::Simple, PrimitiveType::Point>> _simplePoints{};
+	template <>
+	std::vector<_PrimitivesToDraw<MaterialType::Simple, PrimitiveType::Point>>&
+		_getPrimitivesToDraw<MaterialType::Simple, PrimitiveType::Point>(void) { return this->_simplePoints; };
+	template <>
+	const std::vector<_PrimitivesToDraw<MaterialType::Simple, PrimitiveType::Point>>&
+		_getPrimitivesToDraw<MaterialType::Simple, PrimitiveType::Point>(void) const { return this->_simplePoints; };
+	//// Simple lines
+	std::vector<_PrimitivesToDraw<MaterialType::Simple, PrimitiveType::Line>> _simpleLines{};
+	template <>
+	std::vector<_PrimitivesToDraw<MaterialType::Simple, PrimitiveType::Line>>&
+		_getPrimitivesToDraw<MaterialType::Simple, PrimitiveType::Line>(void) { return this->_simpleLines; };
+	template <>
+	const std::vector<_PrimitivesToDraw<MaterialType::Simple, PrimitiveType::Line>>&
+		_getPrimitivesToDraw<MaterialType::Simple, PrimitiveType::Line>(void) const { return this->_simpleLines; };
+	//// Simple triangles
+	std::vector<_PrimitivesToDraw<MaterialType::Simple, PrimitiveType::Triangle>> _simpleTriangles{};
+	template <>
+	std::vector<_PrimitivesToDraw<MaterialType::Simple, PrimitiveType::Triangle>>&
+		_getPrimitivesToDraw<MaterialType::Simple, PrimitiveType::Triangle>(void) { return this->_simpleTriangles; };
+	template <>
+	const std::vector<_PrimitivesToDraw<MaterialType::Simple, PrimitiveType::Triangle>>&
+		_getPrimitivesToDraw<MaterialType::Simple, PrimitiveType::Triangle>(void) const { return this->_simpleTriangles; };
+	//// Lambertian points
+	std::vector<_PrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Point>> _lambertianPoints{};
+	template <>
+	std::vector<_PrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Point>>&
+		_getPrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Point>(void) { return this->_lambertianPoints; };
+	template <>
+	const std::vector<_PrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Point>>&
+		_getPrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Point>(void) const { return this->_lambertianPoints; };
+	//// Lambertian lines
+	std::vector<_PrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Line>> _lambertianLines{};
+	template <>
+	std::vector<_PrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Line>>&
+		_getPrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Line>(void) { return this->_lambertianLines; };
+	template <>
+	const std::vector<_PrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Line>>&
+		_getPrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Line>(void) const { return this->_lambertianLines; };
+	//// Lambertian triangles
+	std::vector<_PrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Triangle>> _lambertianTriangles{};
+	template <>
+	std::vector<_PrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Triangle>>&
+		_getPrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Triangle>(void) { return this->_lambertianTriangles; };
+	template <>
+	const std::vector<_PrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Triangle>>&
+		_getPrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Triangle>(void) const { return this->_lambertianTriangles; };
+	/// Surfaces
+	template<MaterialType _materialType>
+	std::vector<const Surface<_materialType>*>&
+		_getSurfacesToDraw(void);
+	template<MaterialType _materialType>
+	const std::vector<const Surface<_materialType>*>&
+		_getSurfacesToDraw(void) const;
+	//// Simple surfaces
+	std::vector<const Surface<MaterialType::Simple>*> _simpleSurfaces{};
+	template <>
+	std::vector<const Surface<MaterialType::Simple>*>&
+		_getSurfacesToDraw(void) { return this->_simpleSurfaces; };
+	template <>
+	const std::vector<const Surface<MaterialType::Simple>*>&
+		_getSurfacesToDraw(void) const { return this->_simpleSurfaces; };
+	//// Lambertian surfaces
+	std::vector<const Surface<MaterialType::Lambertian>*> _lambertianSurfaces{};
+	template <>
+	std::vector<const Surface<MaterialType::Lambertian>*>&
+		_getSurfacesToDraw(void) { return this->_lambertianSurfaces; };
+	template <>
+	const std::vector<const Surface<MaterialType::Lambertian>*>&
+		_getSurfacesToDraw(void) const { return this->_lambertianSurfaces; };
+
+	// Initialization functions
 	void _createContext(void);
 	void _createAllocator(void);
 	void _createCommandPools(void);

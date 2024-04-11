@@ -29,6 +29,7 @@ layout(location = 2) out vec4 outColor;
 
 void main() {
 	gl_Position = cameraParameters.projection * cameraParameters.view * modelTransforms.model * vec4(inPosition, 1.0);
+	gl_PointSize = 2.0;
 	outPosition = vec3(modelTransforms.model * vec4(inPosition, 1.0));
 	outNormal = mat3(modelTransforms.normal) * inNormal;
 	outColor = inColor;

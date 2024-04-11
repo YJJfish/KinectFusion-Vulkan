@@ -3,6 +3,7 @@
 #include <jjyou/vk/Vulkan.hpp>
 #include <jjyou/glsl/glsl.hpp>
 #include <optional>
+#include "Engine.hpp"
 
 /***********************************************************************
  * @class	TSDFVolume
@@ -22,9 +23,7 @@ public:
 	TSDFVolume(std::nullptr_t) {}
 
 	/** @brief	Create a volume.
-	  * @param	context_				Vulkan context.
-	  * @param	allocator_				Vulkan memory allocator.
-	  * @param	descriptorPool_			Vulkan descriptor pool.
+	  * @param	engine_					Vulkan engine.
 	  * @param	resolution_				Voxel resolution.
 	  * @param	size_					Voxel size, in meter.
 	  * @param	corner_					Volume corner. By default, the volume will be placed
@@ -33,9 +32,7 @@ public:
 	  */
 	TSDFVolume(
 		// Vulkan resources
-		const jjyou::vk::Context& context_,
-		const jjyou::vk::VmaAllocator& allocator_,
-		const vk::raii::DescriptorPool& descriptorPool_,
+		const Engine& engine_,
 
 		// Volume parameters
 		const jjyou::glsl::uvec3& resolution_,
@@ -62,7 +59,7 @@ public:
 
 	/** @brief	Get the underlying storage buffer size.
 	  */
-	float bufferSize(void) const { return this->_bufferSize; }
+	vk::DeviceSize bufferSize(void) const { return this->_bufferSize; }
 
 	/** @brief	Get the descriptor set layout for the storage buffer.
 	  */
@@ -80,11 +77,13 @@ public:
 	  */
 	void download(jjyou::glsl::vec2* dst_) const {}
 
+	/** @brief	Reset the volume.
+	  */
+	void reset(void) const;
+
 private:
 
-	const jjyou::vk::Context* _pContext = nullptr;
-	const jjyou::vk::VmaAllocator* _pAllocator = nullptr;
-	vk::DescriptorPool _descriptorPool{ nullptr };
+	const Engine* _pEngine = nullptr;
 	jjyou::glsl::uvec3 _resolution{};
 	float _size = 0.0f;
 	jjyou::glsl::vec3 _corner{};
@@ -94,8 +93,12 @@ private:
 	jjyou::vk::VmaAllocation _volumeMemory{ nullptr };
 	vk::raii::DescriptorSetLayout _descriptorSetLayout{ nullptr };
 	vk::raii::DescriptorSet _descriptorSet{ nullptr };
+	vk::raii::PipelineLayout _pipelineLayout{ nullptr };
+	vk::raii::Pipeline _initVolumePipeline{ nullptr };
 
 	void _createDescriptorSetLayout(void);
 	void _createStorageBuffer(void);
 	void _createDescriptorSet(void);
+	void _createPipelineLayout(void);
+	void _createPipeline(void);
 };

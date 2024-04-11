@@ -9,14 +9,56 @@ class Window {
 
 public:
 
-	Window(void) {}
+	/** @brief	Construct an empty window.
+	  */
+	Window(std::nullptr_t) {}
+
+	/** @brief	Construct a window using window size and title.
+	  */
+	Window(int width_, int height_, const char* title_);
+
+	/** @brief	Copy constructor is disabled.
+	  */
 	Window(const Window&) = delete;
-	Window(Window&&) = delete;
-	Window& operator=(const Window&) = delete;
-	Window& operator=(Window&&) = delete;
+
+	/** @brief	Move constructor.
+	  */
+	Window(Window&& other_) noexcept :
+		_glfwWindow(other_._glfwWindow), _surface(std::move(other_._surface)), _sceneViewer(other_._sceneViewer),
+		_framebufferResized(other_._framebufferResized), _mouseButtonLeftPressTime(other_._mouseButtonLeftPressTime),
+		_cursorPosX(other_._cursorPosX), _cursorPosY(other_._cursorPosY)
+	{
+		if (this->_glfwWindow != nullptr)
+			glfwSetWindowUserPointer(this->_glfwWindow, this);
+		other_._glfwWindow = nullptr;
+	}
+
+	/** @brief	Destructor.
+	  */
 	~Window(void);
 
-	void createWindow(int width_, int height_, const char* title_);
+	/** @brief	Copy assignment is disabled.
+	  */
+	Window& operator=(const Window&) = delete;
+
+	/** @brief	Move assignment.
+	  */
+	Window& operator=(Window&& other_) noexcept {
+		if (this != &other_) {
+			this->~Window();
+			this->_glfwWindow = other_._glfwWindow;
+			this->_surface = std::move(other_._surface);
+			this->_sceneViewer = other_._sceneViewer;
+			this->_framebufferResized = other_._framebufferResized;
+			this->_mouseButtonLeftPressTime = other_._mouseButtonLeftPressTime;
+			this->_cursorPosX = other_._cursorPosX;
+			this->_cursorPosY = other_._cursorPosY;
+			if (this->_glfwWindow != nullptr)
+				glfwSetWindowUserPointer(this->_glfwWindow, this);
+			other_._glfwWindow = nullptr;
+		}
+		return *this;
+	}
 
 	static std::vector<const char*> getRequiredInstanceExtensions(void);
 
@@ -40,6 +82,7 @@ public:
 	static void waitEvents(void) { glfwWaitEvents(); }
 	static void pollEvents(void) { glfwPollEvents(); }
 	int windowShouldClose(void) const { return glfwWindowShouldClose(this->_glfwWindow); }
+	jjyou::glsl::mat4 getViewMatrix(void) const { return this->_sceneViewer.getViewMatrix(); }
 
 private:
 

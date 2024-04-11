@@ -14,6 +14,5 @@ public:
 private:
 
 	Engine _engine;
-	Window _window;
 	KinectFusion _kinectFusion;
 };

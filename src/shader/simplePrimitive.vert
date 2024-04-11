@@ -26,5 +26,6 @@ layout(location = 0) out vec4 outColor;
 
 void main() {
 	gl_Position = cameraParameters.projection * cameraParameters.view * modelTransforms.model * vec4(inPosition, 1.0);
+	gl_PointSize = 2.0;
 	outColor = inColor;
 }
