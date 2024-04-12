@@ -10,13 +10,23 @@ class Engine {
 
 public:
 
+	/** @brief	Number of frames in flight.
+	  */
 	static inline constexpr std::uint32_t NUM_FRAMES_IN_FLIGHT = 2;
 	
+	/** @brief	Constructor.
+	  */
 	Engine(bool headlessMode_, bool debugMode_);
+
+	/** @brief	Disable copy/move constructor/assignment.
+	  */
 	Engine(const Engine&) = delete;
 	Engine(Engine&&) = delete;
 	Engine& operator=(const Engine&) = delete;
 	Engine& operator=(Engine&&) = delete;
+
+	/** @brief	Destructor.
+	  */
 	~Engine(void);
 
 	bool headlessMode(void) const { return this->_headlessMode; }
@@ -27,6 +37,10 @@ public:
 	const vk::raii::CommandPool& commandPool(jjyou::vk::Context::QueueType queueType_) const { return this->_commandPools[queueType_]; }
 	const vk::raii::CommandPool& commandPool(std::size_t queueType_) const { return this->_commandPools[queueType_]; }
 	const vk::raii::DescriptorPool& descriptorPool(void) const { return this->_descriptorPool; }
+	const vk::raii::DescriptorSetLayout& viewLevelDescriptorSetLayout(void) const { return this->_viewLevelDescriptorSetLayout; }
+	const vk::raii::DescriptorSetLayout& instanceLevelDescriptorSetLayout(void) const { return this->_instanceLevelDescriptorSetLayout; }
+	const vk::raii::DescriptorSetLayout& surfaceSamplerDescriptorSetLayout(MaterialType _materialType) const { return this->_surfaceSamplerDescriptorSetLayouts[_materialType]; }
+	const vk::raii::DescriptorSetLayout& surfaceStorageDescriptorSetLayout(MaterialType _materialType) const { return this->_surfaceStorageDescriptorSetLayouts[_materialType]; }
 
 	/** @brief	Create a `Primitives` instance.
 	  */
@@ -39,7 +53,7 @@ public:
 	  */
 	template <MaterialType _materialType>
 	Surface<_materialType> createSurface(void) {
-		return Surface<_materialType>(*this, this->_surfaceSamplerDescriptorSetLayouts[_materialType], this->_surfaceStorageDescriptorSetLayouts[_materialType]);
+		return Surface<_materialType>(*this);
 	}
 
 	/** @brief	Prepare a new frame. Call this function before rendering.
@@ -89,9 +103,9 @@ public:
 
 private:
 
-	bool _headlessMode;
+	bool _headlessMode = false;
 
-	bool _debugMode;
+	bool _debugMode = true;
 	
 	jjyou::vk::Context _context{ nullptr };
 
@@ -107,7 +121,7 @@ private:
 
 	Texture2D _depthImage{ nullptr };
 
-	std::vector<vk::raii::Framebuffer> _framebuffers;
+	std::vector<vk::raii::Framebuffer> _framebuffers{};
 	
 	// View level descriptor set layout, including camera parameters
 	vk::raii::DescriptorSetLayout _viewLevelDescriptorSetLayout{ nullptr };

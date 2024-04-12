@@ -755,8 +755,8 @@ void Engine::_createFrameData(void) {
 			vk::SemaphoreCreateInfo().setFlags(vk::SemaphoreCreateFlags(0))
 		);
 		this->_framesInFlight[i].graphicsCommandBuffer = std::move(graphicsCommandBuffers[i]);
-		this->_framesInFlight[i].viewLevelDescriptorSet = ViewLevelDescriptorSet(*this, this->_viewLevelDescriptorSetLayout);
-		this->_framesInFlight[i].instanceLevelDescriptorSet = InstanceLevelDescriptorSet(*this, this->_instanceLevelDescriptorSetLayout, 256);
+		this->_framesInFlight[i].viewLevelDescriptorSet = ViewLevelDescriptorSet(*this);
+		this->_framesInFlight[i].instanceLevelDescriptorSet = InstanceLevelDescriptorSet(*this, 256);
 	}
 }
 

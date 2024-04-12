@@ -144,18 +144,20 @@ public:
 	  */
 	Surface& operator=(Surface&& other_) noexcept {
 		if (this != &other_) {
-			
+			this->_pEngine = other_._pEngine;
+			this->_samplerDescriptorSetLayout = other_._samplerDescriptorSetLayout;
+			this->_storageDescriptorSetLayout = other_._storageDescriptorSetLayout;
+			this->_textures = std::move(other_._textures);
+			this->_sampler = std::move(other_._sampler);
+			this->_samplerDescriptorSet = std::move(other_._samplerDescriptorSet);
+			this->_storageDescriptorSet = std::move(other_._storageDescriptorSet);
 		}
 		return *this;
 	}
 
 	/** @brief	Construct an empty surface.
 	  */
-	Surface(
-		const Engine& engine_,
-		const vk::raii::DescriptorSetLayout& samplerDescriptorSetLayout_, // combined image samplers
-		const vk::raii::DescriptorSetLayout& storageDescriptorSetLayout_  // storage images
-	);
+	Surface(const Engine& engine_);
 
 	/** @brief	Create textures, and optionally upload data from CPU.
 	  * 
@@ -196,6 +198,24 @@ public:
 		commandBuffer_.draw(6, 1, 0, 0);
 	}
 
+	/** @brief	Get the underlying texture.
+	  */
+	const Texture2D& texture(std::uint32_t index_) const {
+		return this->_textures[index_];
+	}
+
+	/** @brief	Get the descriptor set layout of combind image samplers.
+	  */
+	vk::DescriptorSetLayout samplerDescriptorSetLayout(void) const {
+		return this->_samplerDescriptorSetLayout;
+	}
+
+	/** @brief	Get the descriptor set layout of storage images.
+	  */
+	vk::DescriptorSetLayout storageDescriptorSetLayout(void) const {
+		return this->_storageDescriptorSetLayout;
+	}
+
 	/** @brief	Create the descriptor set layout of combind image samplers.
 	  */
 	static vk::raii::DescriptorSetLayout createSamplerDescriptorSetLayout(const vk::raii::Device& device_) {
@@ -223,7 +243,7 @@ public:
 				.setBinding(i)
 				.setDescriptorType(vk::DescriptorType::eStorageImage)
 				.setDescriptorCount(1)
-				.setStageFlags(vk::ShaderStageFlagBits::eFragment)
+				.setStageFlags(vk::ShaderStageFlagBits::eCompute)
 				.setPImmutableSamplers(nullptr);
 		};
 		vk::DescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = vk::DescriptorSetLayoutCreateInfo()

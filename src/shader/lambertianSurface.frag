@@ -34,9 +34,9 @@ void main() {
 	vec3 inNormal = texture(surfaceNormalTexture, inTexCoord).rgb;
 	float inDepth = texture(surfaceDepthTexture, inTexCoord).r;
 	vec3 inPosition = getInPosition(inDepth);
-	// Assume a directional light along the camera's +z axis
+	// Assume a directional light along the camera's +z axis, intensity=0.99, ambient=0.01
 	vec3 lightDir = -vec3(cameraParameters.view[0][2], cameraParameters.view[1][2], cameraParameters.view[2][2]);
-	outColor.rgb = clamp(dot(normalize(inNormal), normalize(lightDir)), 0.0, 1.0) * inColor.rgb;
+	outColor.rgb = (0.99 * clamp(dot(normalize(inNormal), normalize(lightDir)), 0.0, 1.0) + 0.01) * inColor.rgb;
 	outColor.a = inColor.a;
 	gl_FragDepth = (cameraParameters.projection[2][2] * inDepth + cameraParameters.projection[3][2]) / (cameraParameters.projection[2][3] * inDepth + cameraParameters.projection[3][3]);
 }

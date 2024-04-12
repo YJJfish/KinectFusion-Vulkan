@@ -5,6 +5,8 @@
 #include <optional>
 #include "Engine.hpp"
 
+class KinectFusion;
+
 /***********************************************************************
  * @class	TSDFVolume
  * @brief	TSDFVolume class that manages the properties and the GPU memory
@@ -18,12 +20,42 @@ class TSDFVolume {
 
 public:
 
-	/** @brief	Construct an empty volume.
+	/***********************************************************************
+	 * @class	TSDFParams
+	 * @brief	TSDF volume storage buffer header.
+	 * 
+	 * In the compute shader, the TSDF volume storage buffer header is
+	 * made up of two parts: The header which includes the parameters;
+	 * And an array of vec2 which includes the data. This C++ structure
+	 * corresponds to the header.
+	 ***********************************************************************/
+	struct TSDFParams {
+		jjyou::glsl::uvec3 resolution;
+		float size;
+		jjyou::glsl::vec3 corner;
+		float truncationDistance;
+	};
+
+	/***********************************************************************
+	 * @class	RayCastingParameters
+	 * @brief	Ray casting parameters uniform block.
+	 ***********************************************************************/
+	struct RayCastingParameters {
+		jjyou::glsl::mat4 invProjection;
+		jjyou::glsl::mat4 invView;
+		float minDepth;
+		float maxDepth;
+		float marchingStep;
+		float invalidDepth;
+	};
+
+	/** @brief	Construct an empty volume in invalid state.
 	  */
 	TSDFVolume(std::nullptr_t) {}
 
 	/** @brief	Create a volume.
 	  * @param	engine_					Vulkan engine.
+	  * @param	kinectFusion_			The KinectFusion instance that owns this volume.
 	  * @param	resolution_				Voxel resolution.
 	  * @param	size_					Voxel size, in meter.
 	  * @param	corner_					The coordinate of the corner voxel's center point.
@@ -35,12 +67,50 @@ public:
 		// Vulkan resources
 		const Engine& engine_,
 
+		// The KinectFusion that owns the volume
+		const KinectFusion& kinectFusion_,
+
 		// Volume parameters
 		const jjyou::glsl::uvec3& resolution_,
 		float size_,
 		std::optional<jjyou::glsl::vec3> corner_ = std::nullopt,
 		std::optional<float> truncationDistance_ = std::nullopt
 	);
+
+	/** @brief	Copy constructor is disabled.
+	  */
+	TSDFVolume(const TSDFVolume&) = delete;
+
+	/** @brief	Move constructor.
+	  */
+	TSDFVolume(TSDFVolume&& other_) = default;
+
+	/** @brief	Copy assignment is disabled.
+	  */
+	TSDFVolume& operator=(const TSDFVolume&) = delete;
+
+	/** @brief	Move assignment.
+	  */
+	TSDFVolume& operator=(TSDFVolume&& other_) noexcept {
+		if (this != &other_) {
+			this->_pEngine = other_._pEngine;
+			this->_pKinectFusion = other_._pKinectFusion;
+			this->_descriptorSetLayout = other_._descriptorSetLayout;
+			this->_resolution = other_._resolution;
+			this->_size = other_._size;
+			this->_corner = other_._corner;
+			this->_truncationDistance = other_._truncationDistance;
+			this->_bufferSize = other_._bufferSize;
+			this->_volume = std::move(other_._volume);
+			this->_volumeMemory = std::move(other_._volumeMemory);
+			this->_descriptorSet = std::move(other_._descriptorSet);
+		}
+		return *this;
+	}
+
+	/** @brief	Destructor.
+	  */
+	~TSDFVolume(void) = default;
 
 	/** @brief	Get the voxel resolution (i.e. number of voxels along the x/y/z axis).
 	  */
@@ -62,29 +132,51 @@ public:
 	  */
 	vk::DeviceSize bufferSize(void) const { return this->_bufferSize; }
 
-	/** @brief	Get the descriptor set layout for the storage buffer.
+	/** @brief	Get the descriptor set layout for the volume storage buffer.
 	  */
-	const vk::raii::DescriptorSetLayout& descriptorSetLayout(void) const { return this->_descriptorSetLayout; }
-
-	/** @brief	Get the descriptor set for the storage buffer.
+	vk::DescriptorSetLayout descriptorSetLayout(void) const { return this->_descriptorSetLayout; }
+	
+	/** @brief	Bind the descriptor set.
 	  */
-	const vk::raii::DescriptorSet& descriptorSet(void) const { return this->_descriptorSet; }
-
-	/** @brief	Copy CPU memory to GPU storage buffer memory.
+	void bind(
+		const vk::raii::CommandBuffer& commandBuffer_,
+		vk::PipelineBindPoint pipelineBindPoint_,
+		const vk::raii::PipelineLayout& pipelineLayout_,
+		std::uint32_t setIndex_
+	) const {
+		commandBuffer_.bindDescriptorSets(pipelineBindPoint_, *pipelineLayout_, setIndex_, *this->_descriptorSet, nullptr);
+	}
+	
+	/** @brief	TODO: Copy CPU memory to GPU storage buffer memory.
 	  */
 	void upload(const jjyou::glsl::vec2* src_) const {}
 
-	/** @brief	Copy GPU storage buffer memory to CPU memory.
+	/** @brief	TODO: Copy GPU storage buffer memory to CPU memory.
 	  */
 	void download(jjyou::glsl::vec2* dst_) const {}
 
-	/** @brief	Reset the volume.
+	/** @brief	Create the descriptor set layout for TSDF volume storage buffer.
 	  */
-	void reset(void) const;
+	static vk::raii::DescriptorSetLayout createDescriptorSetLayout(const vk::raii::Device& device_) {
+		std::vector<vk::DescriptorSetLayoutBinding> descriptorSetLayoutBindings = {
+		vk::DescriptorSetLayoutBinding()
+		.setBinding(0)
+		.setDescriptorType(vk::DescriptorType::eStorageBuffer)
+		.setDescriptorCount(1)
+		.setStageFlags(vk::ShaderStageFlagBits::eCompute)
+		.setPImmutableSamplers(nullptr)
+		};
+		vk::DescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = vk::DescriptorSetLayoutCreateInfo()
+			.setFlags(vk::DescriptorSetLayoutCreateFlags(0))
+			.setBindings(descriptorSetLayoutBindings);
+		return vk::raii::DescriptorSetLayout(device_, descriptorSetLayoutCreateInfo);
+	}
 
 private:
 
 	const Engine* _pEngine = nullptr;
+	const KinectFusion* _pKinectFusion = nullptr;
+	vk::DescriptorSetLayout _descriptorSetLayout{ nullptr }; // Descriptor set layout should be owned by KinectFusion.
 	jjyou::glsl::uvec3 _resolution{};
 	float _size = 0.0f;
 	jjyou::glsl::vec3 _corner{};
@@ -92,14 +184,8 @@ private:
 	vk::DeviceSize _bufferSize = 0ULL;
 	vk::raii::Buffer _volume{ nullptr };
 	jjyou::vk::VmaAllocation _volumeMemory{ nullptr };
-	vk::raii::DescriptorSetLayout _descriptorSetLayout{ nullptr };
 	vk::raii::DescriptorSet _descriptorSet{ nullptr };
-	vk::raii::PipelineLayout _pipelineLayout{ nullptr };
-	vk::raii::Pipeline _initVolumePipeline{ nullptr };
 
-	void _createDescriptorSetLayout(void);
 	void _createStorageBuffer(void);
 	void _createDescriptorSet(void);
-	void _createPipelineLayout(void);
-	void _createPipeline(void);
 };

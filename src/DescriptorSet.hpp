@@ -5,10 +5,11 @@
 #include <stdexcept>
 
 class Engine;
+class KinectFusion;
 
 /***********************************************************************
  * @class	ViewLevelDescriptorSet
- * @brief	Descriptor set 0 in the shaders.
+ * @brief	Descriptor set 0 in the scene rendering shaders.
  ***********************************************************************/
 class ViewLevelDescriptorSet {
 
@@ -28,12 +29,9 @@ public:
 	  */
 	ViewLevelDescriptorSet(std::nullptr_t) {}
 
-	/** @brief	Construct a descriptor set given the engine and the descriptor set layout.
+	/** @brief	Construct a descriptor set given the engine.
 	  */
-	ViewLevelDescriptorSet(
-		const Engine& engine_,
-		const vk::raii::DescriptorSetLayout& descriptorSetLayout_
-	);
+	ViewLevelDescriptorSet(const Engine& engine_);
 
 	/** @brief	Copy constructor is disabled.
 	  */
@@ -65,10 +63,6 @@ public:
 	  */
 	~ViewLevelDescriptorSet(void) = default;
 
-	/** @brief	Get the descriptor set layout.
-	  */
-	const vk::DescriptorSetLayout& descriptorSetLayout(void) const { return this->_descriptorSetLayout; }
-
 	/** @brief	Get the descriptor set.
 	  */
 	const vk::raii::DescriptorSet& descriptorSet(void) const { return this->_descriptorSet; }
@@ -86,6 +80,12 @@ public:
 		std::uint32_t setIndex_
 	) const {
 		commandBuffer_.bindDescriptorSets(pipelineBindPoint_, *pipelineLayout_, setIndex_, *this->_descriptorSet, nullptr);
+	}
+
+	/** @brief	Get the descriptor set layout.
+	  */
+	vk::DescriptorSetLayout descriptorSetLayout(void) const {
+		return this->_descriptorSetLayout;
 	}
 	
 	/** @brief	Create the descriptor set layout.
@@ -113,7 +113,6 @@ private:
 	vk::raii::Buffer _cameraParametersBuffer{ nullptr };
 	jjyou::vk::VmaAllocation _cameraParametersBufferMemory{ nullptr };
 	void* _cameraParametersBufferMemoryMappedAddress = nullptr;
-
 };
 
 /***********************************************************************
@@ -137,13 +136,9 @@ public:
 	  */
 	InstanceLevelDescriptorSet(std::nullptr_t) {}
 
-	/** @brief	Construct a descriptor set given the engine, the descriptor set layout, and the number of ModelTransforms.
+	/** @brief	Construct a descriptor set given the engine and the number of ModelTransforms.
 	  */
-	InstanceLevelDescriptorSet(
-		const Engine& engine_,
-		const vk::raii::DescriptorSetLayout& descriptorSetLayout_,
-		std::uint32_t numModelTransforms_
-	);
+	InstanceLevelDescriptorSet(const Engine& engine_, std::uint32_t numModelTransforms_);
 
 	/** @brief	Copy constructor is disabled.
 	  */
@@ -177,10 +172,6 @@ public:
 	  */
 	~InstanceLevelDescriptorSet(void) = default;
 
-	/** @brief	Get the descriptor set layout.
-	  */
-	const vk::DescriptorSetLayout& descriptorSetLayout(void) const { return this->_descriptorSetLayout; }
-
 	/** @brief	Get the descriptor set.
 	  */
 	const vk::raii::DescriptorSet& descriptorSet(void) const { return this->_descriptorSet; }
@@ -212,6 +203,12 @@ public:
 	) const {
 		commandBuffer_.bindDescriptorSets(pipelineBindPoint_, *pipelineLayout_, setIndex_, *this->_descriptorSet, this->modelTransformsDynamicOffset(instanceIndex_));
 	}
+
+	/** @brief	Get the descriptor set layout.
+	  */
+	vk::DescriptorSetLayout descriptorSetLayout(void) const {
+		return this->_descriptorSetLayout;
+	}
 	
 	/** @brief	Create the descriptor set layout.
 	  */
@@ -240,4 +237,120 @@ private:
 	jjyou::vk::VmaAllocation _modelTransformsBufferMemory{ nullptr };
 	void* _modelTransformsBufferMemoryMappedAddress = nullptr;
 	std::uint32_t _numModelTransforms = 0;
+
+};
+
+/***********************************************************************
+ * @class	RayCastingDescriptorSet
+ * @brief	Descriptor set 1 in the ray casting shader.
+ ***********************************************************************/
+class RayCastingDescriptorSet {
+
+public:
+
+	/***********************************************************************
+	 * @class	RayCastingParameters
+	 * @brief	Binding 0 uniform buffer in the ray casting shaders.
+	 ***********************************************************************/
+	struct RayCastingParameters {
+		jjyou::glsl::mat4 invProjection;
+		jjyou::glsl::mat4 invView;
+		float minDepth;
+		float maxDepth;
+		float marchingStep;
+		float invalidDepth;
+	};
+
+	/** @brief	Construct an empty descriptor set in invalid state.
+	  */
+	RayCastingDescriptorSet(std::nullptr_t) {}
+
+	/** @brief	Construct a descriptor set given the engine and the fusion.
+	  */
+	RayCastingDescriptorSet(
+		const Engine& engine_,
+		const KinectFusion& kinectFusion_
+	);
+
+	/** @brief	Copy constructor is disabled.
+	  */
+	RayCastingDescriptorSet(const RayCastingDescriptorSet&) = delete;
+
+	/** @brief	Move constructor.
+	  */
+	RayCastingDescriptorSet(RayCastingDescriptorSet&& other_) = default;
+
+	/** @brief	Copy assignment is disabled.
+	  */
+	RayCastingDescriptorSet& operator=(const RayCastingDescriptorSet&) = delete;
+
+	/** @brief	Move assignment.
+	  */
+	RayCastingDescriptorSet& operator=(RayCastingDescriptorSet&& other_) noexcept {
+		if (this != &other_) {
+			this->_pEngine = other_._pEngine;
+			this->_descriptorSetLayout = other_._descriptorSetLayout;
+			this->_descriptorSet = std::move(other_._descriptorSet);
+			this->_rayCastingParametersBuffer = std::move(other_._rayCastingParametersBuffer);
+			this->_rayCastingParametersBufferMemory = std::move(other_._rayCastingParametersBufferMemory);
+			this->_rayCastingParametersBufferMemoryMappedAddress = other_._rayCastingParametersBufferMemoryMappedAddress;
+		}
+		return *this;
+	}
+
+	/** @brief	Destructor.
+	  */
+	~RayCastingDescriptorSet(void) = default;
+
+	/** @brief	Get the descriptor set.
+	  */
+	const vk::raii::DescriptorSet& descriptorSet(void) const { return this->_descriptorSet; }
+
+	/** @brief	Get the mapped address for RayCastingParameters (binding 0).
+	  */
+	RayCastingParameters& rayCastingParameters(void) const { return *reinterpret_cast<RayCastingDescriptorSet::RayCastingParameters*>(this->_rayCastingParametersBufferMemoryMappedAddress); }
+
+	/** @brief	Bind the descriptor set.
+	  */
+	void bind(
+		const vk::raii::CommandBuffer& commandBuffer_,
+		vk::PipelineBindPoint pipelineBindPoint_,
+		const vk::raii::PipelineLayout& pipelineLayout_,
+		std::uint32_t setIndex_
+	) const {
+		commandBuffer_.bindDescriptorSets(pipelineBindPoint_, *pipelineLayout_, setIndex_, *this->_descriptorSet, nullptr);
+	}
+
+	/** @brief	Get the descriptor set layout.
+	  */
+	vk::DescriptorSetLayout descriptorSetLayout(void) const {
+		return this->_descriptorSetLayout;
+	}
+
+	/** @brief	Create the descriptor set layout.
+	  */
+	static vk::raii::DescriptorSetLayout createDescriptorSetLayout(const vk::raii::Device& device_) {
+		std::vector<vk::DescriptorSetLayoutBinding> descriptorSetLayoutBindings = {
+			vk::DescriptorSetLayoutBinding()
+			.setBinding(0)
+			.setDescriptorType(vk::DescriptorType::eUniformBuffer)
+			.setDescriptorCount(1)
+			.setStageFlags(vk::ShaderStageFlagBits::eCompute)
+			.setPImmutableSamplers(nullptr)
+		};
+		vk::DescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = vk::DescriptorSetLayoutCreateInfo()
+			.setFlags(vk::DescriptorSetLayoutCreateFlags(0))
+			.setBindings(descriptorSetLayoutBindings);
+		return vk::raii::DescriptorSetLayout(device_, descriptorSetLayoutCreateInfo);
+	}
+
+private:
+
+	const Engine* _pEngine = nullptr;
+	const KinectFusion* _pKinectFusion = nullptr;
+	vk::DescriptorSetLayout _descriptorSetLayout{ nullptr }; // Descriptor set layout should be owned by KinectFusion.
+	vk::raii::DescriptorSet _descriptorSet{ nullptr };
+	vk::raii::Buffer _rayCastingParametersBuffer{ nullptr };
+	jjyou::vk::VmaAllocation _rayCastingParametersBufferMemory{ nullptr };
+	void* _rayCastingParametersBufferMemoryMappedAddress = nullptr;
 };

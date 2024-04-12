@@ -60,11 +60,10 @@ Texture2D::Texture2D(
 }
 
 template <MaterialType _materialType>
-Surface<_materialType>::Surface(
-	const Engine& engine_,
-	const vk::raii::DescriptorSetLayout& samplerDescriptorSetLayout_,
-	const vk::raii::DescriptorSetLayout& storageDescriptorSetLayout_
-) : _pEngine(&engine_), _samplerDescriptorSetLayout(*samplerDescriptorSetLayout_), _storageDescriptorSetLayout(*storageDescriptorSetLayout_)
+Surface<_materialType>::Surface(const Engine& engine_) :
+	_pEngine(&engine_),
+	_samplerDescriptorSetLayout(*engine_.surfaceSamplerDescriptorSetLayout(_materialType)),
+	_storageDescriptorSetLayout(*engine_.surfaceStorageDescriptorSetLayout(_materialType))
 {
 	// Create empty textures
 	{

@@ -27,7 +27,17 @@ void main(){
 	uint y = gl_GlobalInvocationID.y;
 	if (x >= tsdfVolume.resolution.x || y >= tsdfVolume.resolution.y)
 		return;
-	for (uint z = 0; z < tsdfVolume.resolution.z; ++z)
-		tsdfVolume.data[(x *  tsdfVolume.resolution.y + y) * tsdfVolume.resolution.z + z] = vec2(0.0, 0.0);
+	//for (uint z = 0; z < tsdfVolume.resolution.z; ++z)
+	//	tsdfVolume.data[(x *  tsdfVolume.resolution.y + y) * tsdfVolume.resolution.z + z] = vec2(0.0, 0.0);
+	for (uint z = 0; z < tsdfVolume.resolution.z; ++z) {
+		vec3 coord = vec3(float(x), float(y), float(z)) * tsdfVolume.size + tsdfVolume.corner;
+		float distance = length(coord - vec3(0.3, 0.0, 0.0)) - 0.3;
+		vec2 storedValue;
+		if (distance < -tsdfVolume.truncationDistance)
+			storedValue = vec2(0.0, 0.0);
+		else
+			storedValue = vec2(distance / tsdfVolume.truncationDistance, 1.0);
+		tsdfVolume.data[(x *  tsdfVolume.resolution.y + y) * tsdfVolume.resolution.z + z] = storedValue;
+	}
 	return;
 }

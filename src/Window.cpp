@@ -27,7 +27,7 @@ Window::Window(int width_, int height_, const char* title_) {
 	glfwSetCursorPosCallback(this->_glfwWindow, Window::_cursorPosCallbackDelegate);
 	glfwSetScrollCallback(this->_glfwWindow, Window::_scrollCallbackDelegate);
 	glfwSetKeyCallback(this->_glfwWindow, Window::_keyCallbackDelegate);
-	this->resetSceneViewer();
+	this->_resetSceneViewer();
 	++Window::_numGLFWWindows;
 }
 
@@ -59,11 +59,54 @@ void Window::_mouseButtonCallbackDelegate(GLFWwindow* glfwWindow_, int button_, 
 }
 void Window::_mouseButtonCallback(int button_, int action_, int mods_) {
 	auto now = std::chrono::steady_clock::now();
-	if (button_ == GLFW_MOUSE_BUTTON_LEFT && action_ == GLFW_PRESS) {
-		if ((now - this->_mouseButtonLeftPressTime).count() <= 200000000) {
-			this->resetSceneViewer();
+	switch (button_) {
+	case GLFW_MOUSE_BUTTON_LEFT: {
+		switch (action_) {
+		case GLFW_RELEASE: {
+			this->_mouseButtonLeftPressed = false;
+			break;
 		}
-		this->_mouseButtonLeftPressTime = now;
+		case GLFW_PRESS: {
+			this->_mouseButtonLeftPressed = true;
+			if ((this->_cameraMode == CameraMode::Scene) && (now - this->_mouseButtonLeftPressTime).count() <= 200000000) {
+				this->_resetSceneViewer();
+			}
+			this->_mouseButtonLeftPressTime = now;
+			break;
+		}
+		default: {break; }
+		}
+		break;
+	}
+	case GLFW_MOUSE_BUTTON_RIGHT: {
+		switch (action_) {
+		case GLFW_RELEASE: {
+			this->_mouseButtonRightPressed = false;
+			break;
+		}
+		case GLFW_PRESS: {
+			this->_mouseButtonRightPressed = true;
+			break;
+		}
+		default: {break; }
+		}
+		break;
+	}
+	case GLFW_MOUSE_BUTTON_MIDDLE: {
+		switch (action_) {
+		case GLFW_RELEASE: {
+			this->_mouseButtonMiddlePressed = false;
+			break;
+		}
+		case GLFW_PRESS: {
+			this->_mouseButtonMiddlePressed = true;
+			break;
+		}
+		default: {break; }
+		}
+		break;
+	}
+	default: {break; }
 	}
 }
 
@@ -72,16 +115,18 @@ void Window::_cursorPosCallbackDelegate(GLFWwindow* glfwWindow_, double xPos_, d
 	window->_cursorPosCallback(xPos_, yPos_);
 }
 void Window::_cursorPosCallback(double xPos_, double yPos_) {
-	if (glfwGetMouseButton(this->_glfwWindow, GLFW_MOUSE_BUTTON_MIDDLE) == GLFW_PRESS) {
-		if (glfwGetKey(this->_glfwWindow, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS || glfwGetKey(this->_glfwWindow, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS) {
-			this->_sceneViewer.moveUp(static_cast<float>(0.001 * (yPos_ - this->_cursorPosY)));
-			this->_sceneViewer.moveLeft(static_cast<float>(0.001 * (xPos_ - this->_cursorPosX)));
-		}
-		else if (glfwGetKey(this->_glfwWindow, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS || glfwGetKey(this->_glfwWindow, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS) {
-			this->_sceneViewer.zoomIn(static_cast<float>(1.0 - 0.005 * (yPos_ - this->_cursorPosY)));
-		}
-		else {
-			this->_sceneViewer.turn(static_cast<float>(0.002 * (this->_cursorPosX - xPos_)), static_cast<float>(0.002 * (this->_cursorPosY - yPos_)), 0.0f);
+	if (this->_cameraMode == CameraMode::Scene) {
+		if (this->_mouseButtonMiddlePressed) {
+			if (glfwGetKey(this->_glfwWindow, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS || glfwGetKey(this->_glfwWindow, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS) {
+				this->_sceneViewer.moveUp(static_cast<float>(0.001 * (yPos_ - this->_cursorPosY)));
+				this->_sceneViewer.moveLeft(static_cast<float>(0.001 * (xPos_ - this->_cursorPosX)));
+			}
+			else if (glfwGetKey(this->_glfwWindow, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS || glfwGetKey(this->_glfwWindow, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS) {
+				this->_sceneViewer.zoomIn(static_cast<float>(1.0 - 0.005 * (yPos_ - this->_cursorPosY)));
+			}
+			else {
+				this->_sceneViewer.turn(static_cast<float>(0.002 * (this->_cursorPosX - xPos_)), static_cast<float>(0.002 * (this->_cursorPosY - yPos_)), 0.0f);
+			}
 		}
 	}
 	this->_cursorPosX = xPos_;

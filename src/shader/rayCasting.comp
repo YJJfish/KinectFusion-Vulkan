@@ -23,7 +23,7 @@ layout(set = 0, binding = 0) readonly buffer TSDFVolume {
 
 /** @brief	Ray casting parameters.
   */
-layout(set = 1, binding = 0) readonly buffer RayCastingParameters {
+layout(set = 1, binding = 0) uniform RayCastingParameters {
 	mat4 invProjection;
 	mat4 invView;
 	float minDepth;
@@ -67,17 +67,38 @@ vec2 readVoxel(uvec3 index) {
 	return tsdfVolume.data[(index.x *  tsdfVolume.resolution.y + index.y) * tsdfVolume.resolution.z + index.z];
 }
 
+/** @brief	Compute the coefficients of trilinear interpolation.
+  * @sa		https://en.wikipedia.org/wiki/Trilinear_interpolation#Alternative_algorithm
+  *	@param	normalizedPos	Normalized position in [0, 1]^3
+  *	@param	tsdf			The 8 nearest voxels' TSDF value
+  *	@param	coeff			Output coefficients.
+  *
+  *			Since we normalized the position to [0, 1]^3, the formula can be simplified
+  *			a lot. (Plugging x0=y0=z0=0 and x1=y1=z1=1 into the original formula.)
+  */
+void getCoefficients(in vec3 normalizedPos, in float tsdf[2][2][2], out float coeff[8]) {
+	coeff[0] = tsdf[0][0][0];
+	coeff[1] = -tsdf[0][0][0] + tsdf[1][0][0];
+	coeff[2] = -tsdf[0][0][0] + tsdf[0][1][0];
+	coeff[3] = -tsdf[0][0][0] + tsdf[0][0][1];
+	coeff[4] = tsdf[0][0][0] - tsdf[0][1][0] - tsdf[1][0][0] + tsdf[1][1][0];
+	coeff[5] = tsdf[0][0][0] - tsdf[0][0][1] - tsdf[1][0][0] + tsdf[1][0][1];
+	coeff[6] = tsdf[0][0][0] - tsdf[0][0][1] - tsdf[0][1][0] + tsdf[0][1][1];
+	coeff[7] = -tsdf[0][0][0] + tsdf[0][0][1] + tsdf[0][1][0] - tsdf[0][1][1] + tsdf[1][0][0] - tsdf[1][0][1] - tsdf[1][1][0] + tsdf[1][1][1];
+}
+
 /** @brief	Helper function to interpolate the TSDF value.
   * @note	It's the caller's reponsibility to make sure `pos` is within valid range.
   * @param	pos		The position in world space.
   * @param	valid	Indicate whether the 8 corners contain zero-weighted voxels.
-  * @return		The interpolated TSDF value.
+  * @return			The interpolated TSDF value.
   */
 float interpolateTSDF(in vec3 pos, out bool valid) {
 	valid = true;
 	uvec3 baseIndex = uvec3((pos - tsdfVolume.corner) / tsdfVolume.size);
 	for (uint i = 0; i < 3; ++i)
 		baseIndex[i] = min(max(baseIndex[i], 0), tsdfVolume.resolution[i] - 1);
+	// Normalize pos to [0, 1]^3
 	vec3 normalizedPos = (pos - tsdfVolume.corner) / tsdfVolume.size - vec3(baseIndex);
 	// Read 8 nearest voxels.
 	float tsdf[2][2][2];
@@ -88,24 +109,51 @@ float interpolateTSDF(in vec3 pos, out bool valid) {
 				if (voxel.y == 0.0) valid = false;
 				tsdf[dx][dy][dz] = voxel.x;
 			}
-	// Interpolate along the x axis.
-	float xInterpolated[2][2];
-	for (uint dy = 0; dy < 2; ++dy)
-		for (uint dz = 0; dz < 2; ++dz) {
-			xInterpolated[dy][dz] = tsdf[0][dy][dz] * (1.0 - normalizedPos.x) + tsdf[1][dy][dz] * (normalizedPos.x);
-		}
-	// Interpolate along the y axis.
-	float xyInterpolated[2];
-	for (uint dz = 0; dz < 2; ++dz) {
-		xyInterpolated[dz] = xInterpolated[0][dz] * (1.0 - normalizedPos.y) + xInterpolated[1][dz] * (normalizedPos.y);
-	}
-	// Interpolate along the z axis.
-	float xyzInterpolated;
-	{
-		xyzInterpolated = xyInterpolated[0] * (1.0 - normalizedPos.z) + xyInterpolated[1] * (normalizedPos.z);
-	}
-	return xyzInterpolated;
-} 
+	// Interpolate
+	float coeff[8];
+	getCoefficients(normalizedPos, tsdf, coeff);
+	float interpolated = \
+		coeff[0] +
+		coeff[1] * normalizedPos.x + \
+		coeff[2] * normalizedPos.y + \
+		coeff[3] * normalizedPos.z + \
+		coeff[4] * normalizedPos.x * normalizedPos.y + \
+		coeff[5] * normalizedPos.x * normalizedPos.z + \
+		coeff[6] * normalizedPos.y * normalizedPos.z + \
+		coeff[7] * normalizedPos.x * normalizedPos.y * normalizedPos.z;
+	return interpolated;
+}
+
+/** @brief	Helper function to compute the normal at a point on the zero-surface.
+  * @note	It's the caller's reponsibility to make sure `pos` is within valid range.
+  * @param	pos		The position in world space. It should be on the zero-surface.
+  * @return			The interpolated TSDF value.
+  */
+vec3 computeNormal(vec3 pos) {
+	uvec3 baseIndex = uvec3((pos - tsdfVolume.corner) / tsdfVolume.size);
+	for (uint i = 0; i < 3; ++i)
+		baseIndex[i] = min(max(baseIndex[i], 0), tsdfVolume.resolution[i] - 1);
+	// Normalize pos to [0, 1]^3
+	vec3 normalizedPos = (pos - tsdfVolume.corner) / tsdfVolume.size - vec3(baseIndex);
+	// Read 8 nearest voxels.
+	float tsdf[2][2][2];
+	for (uint dx = 0; dx < 2; ++dx)
+		for (uint dy = 0; dy < 2; ++dy)
+			for (uint dz = 0; dz < 2; ++dz) {
+				vec2 voxel = readVoxel(baseIndex + uvec3(dx, dy, dz));
+				tsdf[dx][dy][dz] = voxel.x;
+			}
+	// Get the coefficients of trilinear interpolation.
+	float coeff[8];
+	getCoefficients(normalizedPos, tsdf, coeff);
+	// The normal should be the gradient of the interpolated TSDF.
+	vec3 normal = normalize(vec3(
+		coeff[1] + coeff[4] * normalizedPos.y + coeff[5] * normalizedPos.z + coeff[7] * normalizedPos.y * normalizedPos.z,
+		coeff[2] + coeff[4] * normalizedPos.x + coeff[6] * normalizedPos.z + coeff[7] * normalizedPos.x * normalizedPos.z,
+		coeff[3] + coeff[5] * normalizedPos.x + coeff[6] * normalizedPos.y + coeff[7] * normalizedPos.x * normalizedPos.y
+	));
+	return normal;
+}
 
 /** @brief	Function that actually does ray casting.
   */
@@ -123,7 +171,8 @@ bool rayCasting(
 	minT = max(minT, rayCastingParameters.minDepth * scaleFactor);
 	float maxT = getMaxT(rayOrigin, rayDir, minCorner, maxCorner);
 	maxT = min(maxT, rayCastingParameters.maxDepth * scaleFactor);
-	if (minT >= maxT) return false;
+	if (minT >= maxT)
+		return false;
 	// Start ray casting
 	float currT = minT + 1e-5;
 	float lastT = -1.0;
@@ -142,7 +191,7 @@ bool rayCasting(
 		else if (currTSDF > 1e-5) {
 			// Still outside of the zero-surface. Continue marching.
 			lastT = currT;
-			currT += rayCastingParameters.marchingStep;
+			currT += max(rayCastingParameters.marchingStep, tsdfVolume.truncationDistance * currTSDF * 0.9);
 			lastTSDF = currTSDF;
 			continue;
 		}
@@ -153,7 +202,7 @@ bool rayCasting(
 				float t = lastT + (currT - lastT) * lastTSDF / (lastTSDF - currTSDF);
 				outColor = vec4(0.6, 0.6, 0.6, 1.0);
 				outDepth = t / scaleFactor;
-				outNormal = rayDir;
+				outNormal = computeNormal(rayOrigin + t * rayDir);
 				return true;
 			}
 			else {
@@ -166,7 +215,7 @@ bool rayCasting(
 			float t = currT;
 			outColor = vec4(0.6, 0.6, 0.6, 1.0);
 			outDepth = t / scaleFactor;
-			outNormal = rayDir;
+			outNormal = computeNormal(rayOrigin + t * rayDir);
 			return true;
 		}
 	}
@@ -188,10 +237,14 @@ void main(){
 	rayDir = normalize(mat3(rayCastingParameters.invView) * rayDir);
 
 	// Ray casting
-	vec4 outColor = vec4(0.0, 0.0, 0.0, 0.0);
-	float outDepth = rayCastingParameters.invalidDepth;
-	vec3 outNormal = vec3(0.0, 0.0, 0.0);
-	rayCasting(rayOrigin, rayDir, scaleFactor, outColor, outDepth, outNormal);
+	vec4 outColor;
+	float outDepth;
+	vec3 outNormal;
+	if (!rayCasting(rayOrigin, rayDir, scaleFactor, outColor, outDepth, outNormal)) {
+		outColor = vec4(0.0, 0.0, 0.0, 0.0);
+		outDepth = rayCastingParameters.invalidDepth;
+		outNormal = vec3(0.0, 0.0, 0.0);
+	}
 
 	// Store
 	imageStore(surfaceColorTexture, outputPixelPos, outColor);
