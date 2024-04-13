@@ -4,10 +4,25 @@
 
 Application::Application(void) :
 	_headlessMode(false),
-	_debugMode(true),
-	_engine(this->_headlessMode, this->_debugMode),
-	_kinectFusion(this->_engine, vk::Extent2D(1024, 1024), vk::Extent2D(1024, 1024), jjyou::glsl::uvec3(512U, 512U, 512U), 0.005f)
+	_debugMode(true)
 {
+	this->_pEngine.reset(new Engine(this->_headlessMode, this->_debugMode));
+	this->_pDataLoader.reset(new VirtualDataLoader(
+		vk::Extent2D(128, 128),
+		jjyou::glsl::vec3(0.0f, 0.0f, 0.0f),
+		0.5f
+	));
+	this->_pKinectFusion.reset(new KinectFusion(
+		*this->_pEngine,
+		this->_pDataLoader->colorFrameExtent(),
+		this->_pDataLoader->depthFrameExtent(),
+		100.0f,
+		this->_pDataLoader->minDepth(),
+		this->_pDataLoader->maxDepth(),
+		this->_pDataLoader->invalidDepth(),
+		jjyou::glsl::uvec3(512U, 512U, 512U),
+		0.005f
+	));
 	std::array<Vertex<MaterialType::Simple>, 6> axesData = { {
 		Vertex<MaterialType::Simple>{.position{0.0f, 0.0f, 0.0f}, .color{255, 0, 0, 255} },
 		Vertex<MaterialType::Simple>{.position{1.0f, 0.0f, 0.0f}, .color{255, 0, 0, 255} },
@@ -21,61 +36,62 @@ Application::Application(void) :
 		Vertex<MaterialType::Lambertian>{.position{0.0f, +1.0f, 0.0f}, .normal{0.0f, 0.0f, -1.0f}, .color{0, 255, 0, 255} },
 		Vertex<MaterialType::Lambertian>{.position{+1.0f, -1.0f, 0.0f}, .normal{0.0f, 0.0f, -1.0f}, .color{0, 255, 0, 255} }
 	} };
-	auto axes = this->_engine.createPrimitives<MaterialType::Simple, PrimitiveType::Line>();
+	auto axes = this->_pEngine->createPrimitives<MaterialType::Simple, PrimitiveType::Line>();
 	axes.setVertexData(axesData);
-	auto triangle = this->_engine.createPrimitives<MaterialType::Lambertian, PrimitiveType::Triangle>();
+	auto triangle = this->_pEngine->createPrimitives<MaterialType::Lambertian, PrimitiveType::Triangle>();
 	triangle.setVertexData(triangleData);
-	Surface<MaterialType::Lambertian> rayCastingMap = this->_engine.createSurface<MaterialType::Lambertian>();
-	/*using vec4ub = jjyou::glsl::vec<unsigned char, 4>;
-	using vec4f = jjyou::glsl::vec<float, 4>;
-	std::array<vec4ub, 9> surfaceColorData{ {
-		vec4ub(255, 0, 0, 255), vec4ub(0, 255, 0, 255), vec4ub(0, 0, 255, 255),
-		vec4ub(0, 0, 255, 255), vec4ub(255, 0, 0, 255), vec4ub(0, 255, 0, 255),
-		vec4ub(0, 255, 0, 255), vec4ub(0, 0, 255, 255), vec4ub(255, 0, 0, 255),
-	} };
-	std::array<float, 9> surfaceDepthData{ {
-		8.0f, 6.0f, 4.0f,
-		4.0f, 8.0f, 6.0f,
-		6.0f, 4.0f, 8.0f,
-	} };
-	surface.createTextures(
-		{ {vk::Extent2D(3, 3), vk::Extent2D(3, 3)} },
-		std::array<const void*, 2>{{surfaceColorData.data(), surfaceDepthData.data()}}
+	Surface<MaterialType::Lambertian> rayCastingMap = this->_pEngine->createSurface<MaterialType::Lambertian>();
+	Surface<MaterialType::Simple> inputMap = this->_pEngine->createSurface<MaterialType::Simple>();
+	
+	/*for (int i = 0; i < 10; ++i)
+		FrameData frameData = this->_pDataLoader->getFrame();
+	FrameData frameData = this->_pDataLoader->getFrame();
+	inputMap.createTextures(
+		{ {this->_pDataLoader->colorFrameExtent(), this->_pDataLoader->depthFrameExtent()} },
+		{ {frameData.colorMap, frameData.depthMap} }
 	);*/
-	while (!this->_engine.window().windowShouldClose()) {
+	
+	while (!this->_pEngine->window().windowShouldClose()) {
+		// Upload the new frame
+		FrameData frameData = this->_pDataLoader->getFrame();
+		inputMap.createTextures(
+			{ {this->_pDataLoader->colorFrameExtent(), this->_pDataLoader->depthFrameExtent()} },
+			{ {frameData.colorMap, frameData.depthMap} }
+		);
+		// Fuse the new frame
+		this->_pKinectFusion->fuse(
+			inputMap,
+			frameData.projection,
+			*frameData.view
+		);
 		// Resize the ray casting map if its size does not match the window framebuffer
-		std::pair<int, int> framebufferSize = this->_engine.window().framebufferSize();
-		vk::Extent2D framebufferExtent = vk::Extent2D(static_cast<std::uint32_t>(framebufferSize.first), static_cast<std::uint32_t>(framebufferSize.second));
-		if (rayCastingMap.texture(0).extent() != framebufferExtent)
-			rayCastingMap.createTextures({ {framebufferExtent, framebufferExtent, framebufferExtent} });
+		std::pair<int, int> framebufferSize = this->_pEngine->window().framebufferSize();
+		vk::Extent2D rayCastingExtent = vk::Extent2D(static_cast<std::uint32_t>(framebufferSize.first), static_cast<std::uint32_t>(framebufferSize.second));
+		if (rayCastingMap.texture(0).extent() != rayCastingExtent)
+			rayCastingMap.createTextures({ {rayCastingExtent, rayCastingExtent, rayCastingExtent} });
 		// Ray casting for visualization
-		jjyou::glsl::mat3 projection{ 1.0f };
-		{
-			float aspectRatio = static_cast<float>(framebufferExtent.width) / static_cast<float>(framebufferExtent.height);
-			float tanHalfYFov = std::tan(std::numbers::pi_v<float> / 3.0f / 2.0f);
-			float tanHalfXFov = aspectRatio * tanHalfYFov;
-			projection[0][0] = 1.0f / tanHalfXFov * static_cast<float>(framebufferExtent.width) / 2.0f; //fx
-			projection[1][1] = 1.0f / tanHalfYFov * static_cast<float>(framebufferExtent.height) / 2.0f; //fy
-			projection[2][0] = static_cast<float>(framebufferExtent.width) / 2.0f; //cx
-			projection[2][1] = static_cast<float>(framebufferExtent.height) / 2.0f; //cy
-		}
-		
-		this->_kinectFusion.rayCasting(
+		jjyou::glsl::mat3 projection = jjyou::glsl::pinhole(std::numbers::pi_v<float> / 3.0f, rayCastingExtent.width, rayCastingExtent.height);
+		this->_pKinectFusion->rayCasting(
 			rayCastingMap,
 			projection,
-			this->_engine.window().getViewMatrix(),
+			this->_pEngine->window().getViewMatrix(),
 			0.01f, 100.0f,
-			std::nullopt,
-			100000.0f
+			100000.0f,
+			std::nullopt
 		);
-		this->_engine.prepareFrame();
+		this->_pEngine->prepareFrame();
 		ImGui::ShowDemoWindow(nullptr);
-		this->_engine.drawPrimitives(axes, jjyou::glsl::mat4(1.0f));
-		this->_engine.drawPrimitives(triangle, jjyou::glsl::mat4(1.0f));
-		this->_engine.drawSurface(rayCastingMap);
-		this->_engine.recordCommandbuffer();
-		this->_engine.presentFrame();
-		this->_engine.window().pollEvents();
+		this->_pEngine->drawPrimitives(axes, jjyou::glsl::mat4(1.0f));
+		this->_pEngine->drawPrimitives(triangle, jjyou::glsl::mat4(1.0f));
+		this->_pEngine->drawPrimitives(
+			axes,
+			jjyou::glsl::inverse(*frameData.view)
+		);
+		this->_pEngine->drawSurface(rayCastingMap);
+		//this->_pEngine->drawSurface(inputMap);
+		this->_pEngine->recordCommandbuffer();
+		this->_pEngine->presentFrame();
+		this->_pEngine->window().pollEvents();
 	}
-	this->_engine.waitIdle();
+	this->_pEngine->waitIdle();
 }

@@ -6,6 +6,15 @@
 #include "Texture.hpp"
 #include "DescriptorSet.hpp"
 
+/***********************************************************************
+ * @class	Engine
+ * @brief	Vulkan Engine class that creates and manages most of the
+ *			Vulkan resources and provides API for graphics rendering.
+ *
+ *			This class does not create or manage the resources related
+ *			to KinectFusion. It is only responsible for Vulkan initialization
+ *			and graphics rendering.
+ ***********************************************************************/
 class Engine {
 
 public:
@@ -29,6 +38,8 @@ public:
 	  */
 	~Engine(void);
 
+	/** @brief	Getters.
+	  */
 	bool headlessMode(void) const { return this->_headlessMode; }
 	bool debugMode(void) const { return this->_debugMode; }
 	const jjyou::vk::Context& context(void) const { return this->_context; }
@@ -95,8 +106,6 @@ public:
 	  */
 	vk::Result presentFrame(void);
 
-	
-	
 	/** @brief	Wait all queues to be idle.
 	  */
 	void waitIdle(void) const;

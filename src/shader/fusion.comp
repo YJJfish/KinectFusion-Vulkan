@@ -1,0 +1,78 @@
+/***********************************************************************
+ * @file	fusion.comp
+ * @author	jjyou
+ * @date	2024-4-12
+ * @brief	This file implements the compute shader to fuse a frame into
+ *			the TSDF volume.
+***********************************************************************/
+
+#version 450
+
+layout (local_size_x = 32, local_size_y = 32) in;
+
+/** @brief	Input TSDF volume.
+  * 
+  * A storage buffer containing all information about the TSDF volume.
+  */
+layout(set = 0, binding = 0) buffer TSDFVolume {
+	uvec3 resolution;
+	float size;
+	vec3 corner;
+	float truncationDistance;
+	vec2 data[];
+} tsdfVolume;
+
+/** @brief	Fusion parameters.
+  */
+layout(set = 1, binding = 0) uniform FusionParameters {
+	mat4 projection;
+	mat4 invProjection;
+	mat4 view;
+	vec3 viewPos;
+	float truncationWeight;
+	float minDepth;
+	float maxDepth;
+	float invalidDepth;
+} fusionParameters;
+
+/** @brief	Input surface textures.
+  * 
+  *			Currently, the color map is not used. Extensions may be
+  *			made in the future to support color fusion.
+  */
+layout (set = 2, binding = 0, rgba8) uniform image2D surfaceColorTexture;
+layout (set = 2, binding = 1, r32f) uniform image2D surfaceDepthTexture;
+
+void main() {
+	if (gl_GlobalInvocationID.x >= tsdfVolume.resolution.x || gl_GlobalInvocationID.y >= tsdfVolume.resolution.y)
+		return;
+	ivec2 depthFrameSize = imageSize(surfaceDepthTexture);
+	uint baseVoxelIndex = (gl_GlobalInvocationID.x * tsdfVolume.resolution.y + gl_GlobalInvocationID.y) * tsdfVolume.resolution.z;
+	vec3 baseProjection = mat3(fusionParameters.projection) * (mat3(fusionParameters.view) * (vec3(gl_GlobalInvocationID.xy, 0.0) * tsdfVolume.size + tsdfVolume.corner) + fusionParameters.view[3].xyz);
+	vec3 deltaProjection = mat3(fusionParameters.projection) * mat3(fusionParameters.view) * vec3(0.0, 0.0, 1.0) * tsdfVolume.size;
+	for (uint z = 0; z < tsdfVolume.resolution.z; ++z) {
+		// Compute the voxel index
+		uint voxelIndex = baseVoxelIndex + z;
+		// Compute the projection of the voxel
+		vec3 projection = baseProjection + float(z) * deltaProjection;
+		if (projection.z <= 0.0) continue;
+		// Read the depth value using the nearest pixel.
+		ivec2 nearestPixel = ivec2(projection.xy / projection.z);
+		if (nearestPixel.x < 0 || nearestPixel.x >= depthFrameSize.x || nearestPixel.y < 0 || nearestPixel.y >= depthFrameSize.y)
+			continue;
+		float pixelDepth = imageLoad(surfaceDepthTexture, nearestPixel).r;
+		if (pixelDepth == fusionParameters.invalidDepth || pixelDepth < fusionParameters.minDepth || pixelDepth > fusionParameters.maxDepth)
+			continue;
+		// Update TSDF
+		vec2 oldVoxelValue = tsdfVolume.data[voxelIndex];
+		float eta = pixelDepth - projection.z;
+		if (eta < -tsdfVolume.truncationDistance)
+			continue;
+		float tsdf = min(1.0, eta / tsdfVolume.truncationDistance);
+		vec2 newVoxelValue = vec2(
+			(oldVoxelValue[0] * oldVoxelValue[1] + tsdf * 1.0) / (oldVoxelValue[1] + 1.0),
+			min(fusionParameters.truncationWeight, oldVoxelValue[1] + 1.0)
+		);
+		tsdfVolume.data[voxelIndex] = newVoxelValue;
+	}
+}

@@ -181,3 +181,60 @@ RayCastingDescriptorSet::RayCastingDescriptorSet(
 		this->_pEngine->context().device().updateDescriptorSets(writeDescriptorSet, nullptr);
 	}
 }
+
+FusionDescriptorSet::FusionDescriptorSet(
+	const Engine& engine_,
+	const KinectFusion& kinectFusion_
+) :
+	_pEngine(&engine_), _pKinectFusion(&kinectFusion_), _descriptorSetLayout(*kinectFusion_.fusionDescriptorSetLayout())
+{
+	// Create descriptor set
+	{
+		vk::DescriptorSetAllocateInfo descriptorSetAllocateInfo = vk::DescriptorSetAllocateInfo()
+			.setDescriptorPool(*this->_pEngine->descriptorPool())
+			.setDescriptorSetCount(1)
+			.setSetLayouts(this->_descriptorSetLayout);
+		this->_descriptorSet = std::move(this->_pEngine->context().device().allocateDescriptorSets(descriptorSetAllocateInfo)[0]);
+	}
+	// Create uniform buffer for binding 0
+	{
+		vk::BufferCreateInfo bufferCreateInfo = vk::BufferCreateInfo()
+			.setFlags(vk::BufferCreateFlags(0))
+			.setSize(sizeof(FusionDescriptorSet::FusionParameters))
+			.setUsage(vk::BufferUsageFlagBits::eUniformBuffer)
+			.setSharingMode(vk::SharingMode::eExclusive)
+			.setQueueFamilyIndices(nullptr);
+		VmaAllocationCreateInfo vmaAllocationCreateInfo{
+			.flags = VmaAllocationCreateFlagBits::VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VmaAllocationCreateFlagBits::VMA_ALLOCATION_CREATE_MAPPED_BIT,
+			.usage = VmaMemoryUsage::VMA_MEMORY_USAGE_AUTO,
+			.requiredFlags = VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			.preferredFlags = VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VkMemoryPropertyFlagBits::VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			.memoryTypeBits = 0,
+			.pool = nullptr,
+			.pUserData = nullptr,
+			.priority = 0.0f,
+		};
+		VkBuffer uniformBuffer = nullptr;
+		VmaAllocation uniformBufferMemory = nullptr;
+		VmaAllocationInfo allocationInfo{};
+		vmaCreateBuffer(*this->_pEngine->allocator(), reinterpret_cast<VkBufferCreateInfo*>(&bufferCreateInfo), &vmaAllocationCreateInfo, &uniformBuffer, &uniformBufferMemory, &allocationInfo);
+		this->_fusionParametersBuffer = vk::raii::Buffer(this->_pEngine->context().device(), uniformBuffer);
+		this->_fusionParametersBufferMemory = jjyou::vk::VmaAllocation(this->_pEngine->allocator(), uniformBufferMemory);
+		this->_fusionParametersBufferMemoryMappedAddress = allocationInfo.pMappedData;
+	}
+	// Update the descriptor set
+	{
+		vk::DescriptorBufferInfo descriptorBufferInfo = vk::DescriptorBufferInfo()
+			.setBuffer(*this->_fusionParametersBuffer)
+			.setOffset(0)
+			.setRange(sizeof(FusionDescriptorSet::FusionParameters));
+		vk::WriteDescriptorSet writeDescriptorSet = vk::WriteDescriptorSet()
+			.setDstSet(*this->_descriptorSet)
+			.setDstBinding(0)
+			.setDstArrayElement(0)
+			.setDescriptorCount(1)
+			.setDescriptorType(vk::DescriptorType::eUniformBuffer)
+			.setBufferInfo(descriptorBufferInfo);
+		this->_pEngine->context().device().updateDescriptorSets(writeDescriptorSet, nullptr);
+	}
+}

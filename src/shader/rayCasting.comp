@@ -28,8 +28,8 @@ layout(set = 1, binding = 0) uniform RayCastingParameters {
 	mat4 invView;
 	float minDepth;
 	float maxDepth;
-	float marchingStep;
 	float invalidDepth;
+	float marchingStep;
 } rayCastingParameters;
 
 /** @brief	Output surface textures.
@@ -37,6 +37,8 @@ layout(set = 1, binding = 0) uniform RayCastingParameters {
   *			Three textures for color, depth, and normal respectively.
   *			Currently, the color map is always constant. Extensions may be
   *			made in the future to support color fusion.
+  *			The depth map is true-depth. It is not in the clipped space of
+  *			graphics rendering.
   */
 layout (set = 2, binding = 0, rgba8) uniform image2D surfaceColorTexture;
 layout (set = 2, binding = 1, r32f) uniform image2D surfaceDepthTexture;
@@ -184,14 +186,16 @@ bool rayCasting(
 		if (!valid) {
 			// One or more surrounding voxels are zero-weighted. Continue marching.
 			lastT = currT;
-			currT += rayCastingParameters.marchingStep;
+			// currT += rayCastingParameters.marchingStep;
+			currT += tsdfVolume.truncationDistance * 0.95;
 			lastTSDF = -1.0;
 			continue;
 		}
 		else if (currTSDF > 1e-5) {
 			// Still outside of the zero-surface. Continue marching.
 			lastT = currT;
-			currT += max(rayCastingParameters.marchingStep, tsdfVolume.truncationDistance * currTSDF * 0.9);
+			//currT += max(rayCastingParameters.marchingStep, tsdfVolume.truncationDistance * currTSDF * 0.95);
+			currT += tsdfVolume.truncationDistance * 0.95;
 			lastTSDF = currTSDF;
 			continue;
 		}

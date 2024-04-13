@@ -257,8 +257,8 @@ public:
 		jjyou::glsl::mat4 invView;
 		float minDepth;
 		float maxDepth;
-		float marchingStep;
 		float invalidDepth;
+		float marchingStep;
 	};
 
 	/** @brief	Construct an empty descriptor set in invalid state.
@@ -353,4 +353,121 @@ private:
 	vk::raii::Buffer _rayCastingParametersBuffer{ nullptr };
 	jjyou::vk::VmaAllocation _rayCastingParametersBufferMemory{ nullptr };
 	void* _rayCastingParametersBufferMemoryMappedAddress = nullptr;
+};
+
+/***********************************************************************
+ * @class	FusionDescriptorSet
+ * @brief	Descriptor set 1 in the fusion shader.
+ ***********************************************************************/
+class FusionDescriptorSet {
+
+public:
+
+	/***********************************************************************
+	 * @class	FusionParameters
+	 * @brief	Binding 0 uniform buffer in the fusion shaders.
+	 ***********************************************************************/
+	struct FusionParameters {
+		jjyou::glsl::mat4 projection;
+		jjyou::glsl::mat4 invProjection;
+		jjyou::glsl::mat4 view;
+		jjyou::glsl::vec3 viewPos;
+		float truncationWeight;
+		float minDepth;
+		float maxDepth;
+		float invalidDepth;
+	};
+
+	/** @brief	Construct an empty descriptor set in invalid state.
+	  */
+	FusionDescriptorSet(std::nullptr_t) {}
+
+	/** @brief	Construct a descriptor set given the engine and the fusion.
+	  */
+	FusionDescriptorSet(
+		const Engine& engine_,
+		const KinectFusion& kinectFusion_
+	);
+
+	/** @brief	Copy constructor is disabled.
+	  */
+	FusionDescriptorSet(const FusionDescriptorSet&) = delete;
+
+	/** @brief	Move constructor.
+	  */
+	FusionDescriptorSet(FusionDescriptorSet&& other_) = default;
+
+	/** @brief	Copy assignment is disabled.
+	  */
+	FusionDescriptorSet& operator=(const FusionDescriptorSet&) = delete;
+
+	/** @brief	Move assignment.
+	  */
+	FusionDescriptorSet& operator=(FusionDescriptorSet&& other_) noexcept {
+		if (this != &other_) {
+			this->_pEngine = other_._pEngine;
+			this->_descriptorSetLayout = other_._descriptorSetLayout;
+			this->_descriptorSet = std::move(other_._descriptorSet);
+			this->_fusionParametersBuffer = std::move(other_._fusionParametersBuffer);
+			this->_fusionParametersBufferMemory = std::move(other_._fusionParametersBufferMemory);
+			this->_fusionParametersBufferMemoryMappedAddress = other_._fusionParametersBufferMemoryMappedAddress;
+		}
+		return *this;
+	}
+
+	/** @brief	Destructor.
+	  */
+	~FusionDescriptorSet(void) = default;
+
+	/** @brief	Get the descriptor set.
+	  */
+	const vk::raii::DescriptorSet& descriptorSet(void) const { return this->_descriptorSet; }
+
+	/** @brief	Get the mapped address for FusionParameters (binding 0).
+	  */
+	FusionParameters& fusionParameters(void) const { return *reinterpret_cast<FusionDescriptorSet::FusionParameters*>(this->_fusionParametersBufferMemoryMappedAddress); }
+
+	/** @brief	Bind the descriptor set.
+	  */
+	void bind(
+		const vk::raii::CommandBuffer& commandBuffer_,
+		vk::PipelineBindPoint pipelineBindPoint_,
+		const vk::raii::PipelineLayout& pipelineLayout_,
+		std::uint32_t setIndex_
+	) const {
+		commandBuffer_.bindDescriptorSets(pipelineBindPoint_, *pipelineLayout_, setIndex_, *this->_descriptorSet, nullptr);
+	}
+
+	/** @brief	Get the descriptor set layout.
+	  */
+	vk::DescriptorSetLayout descriptorSetLayout(void) const {
+		return this->_descriptorSetLayout;
+	}
+
+	/** @brief	Create the descriptor set layout.
+	  */
+	static vk::raii::DescriptorSetLayout createDescriptorSetLayout(const vk::raii::Device& device_) {
+		std::vector<vk::DescriptorSetLayoutBinding> descriptorSetLayoutBindings = {
+			vk::DescriptorSetLayoutBinding()
+			.setBinding(0)
+			.setDescriptorType(vk::DescriptorType::eUniformBuffer)
+			.setDescriptorCount(1)
+			.setStageFlags(vk::ShaderStageFlagBits::eCompute)
+			.setPImmutableSamplers(nullptr)
+		};
+		vk::DescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = vk::DescriptorSetLayoutCreateInfo()
+			.setFlags(vk::DescriptorSetLayoutCreateFlags(0))
+			.setBindings(descriptorSetLayoutBindings);
+		return vk::raii::DescriptorSetLayout(device_, descriptorSetLayoutCreateInfo);
+	}
+
+private:
+
+	const Engine* _pEngine = nullptr;
+	const KinectFusion* _pKinectFusion = nullptr;
+	vk::DescriptorSetLayout _descriptorSetLayout{ nullptr }; // Descriptor set layout should be owned by KinectFusion.
+	vk::raii::DescriptorSet _descriptorSet{ nullptr };
+	vk::raii::Buffer _fusionParametersBuffer{ nullptr };
+	jjyou::vk::VmaAllocation _fusionParametersBufferMemory{ nullptr };
+	void* _fusionParametersBufferMemoryMappedAddress = nullptr;
 };

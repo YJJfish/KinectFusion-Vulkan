@@ -36,19 +36,6 @@ public:
 		float truncationDistance;
 	};
 
-	/***********************************************************************
-	 * @class	RayCastingParameters
-	 * @brief	Ray casting parameters uniform block.
-	 ***********************************************************************/
-	struct RayCastingParameters {
-		jjyou::glsl::mat4 invProjection;
-		jjyou::glsl::mat4 invView;
-		float minDepth;
-		float maxDepth;
-		float marchingStep;
-		float invalidDepth;
-	};
-
 	/** @brief	Construct an empty volume in invalid state.
 	  */
 	TSDFVolume(std::nullptr_t) {}

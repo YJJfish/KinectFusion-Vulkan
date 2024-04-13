@@ -12,11 +12,12 @@ class Engine;
  *			2-dimension texture.
  * 
  *			In this application, a texture includes an image, the binding
- *			image memory, and the image view. The image memory is always
- *			in local device (vk::MemoryPropertyFlagBits::eDeviceLocal).
- *			The image sharing mode is exclusive (vk::SharingMode::eExclusive).
- *			The aspect mask of the image view will either be color or depth, depending
- *			on the image format.
+ *			image memory, the image view, and an optional sampler. The image's
+ *			memory is always in local device (vk::MemoryPropertyFlagBits::eDeviceLocal).
+ *			The image sharing mode can be either exclusive or concurrent, depending
+ *			on the number of queue family indices in the constructor's argument.
+ *			The aspect mask of the image view can be either be color or depth,
+ *			depending on the image format.
  *			Upon creation, the image layout is undefined and not owned by any queue.
  ***********************************************************************/
 class Texture2D {
@@ -55,10 +56,11 @@ public:
 		if (this != &other_) {
 			this->_pEngine = other_._pEngine;
 			this->_image = std::move(other_._image);
-			this->_imageMemory = std::move(other_._imageMemory);
-			this->_imageView = std::move(other_._imageView);
 			this->_format = std::move(other_._format);
 			this->_extent = std::move(other_._extent);
+			this->_imageMemory = std::move(other_._imageMemory);
+			this->_imageView = std::move(other_._imageView);
+			this->_sampler = std::move(other_._sampler);
 		}
 		return *this;
 	}
@@ -91,6 +93,10 @@ public:
 	  */
 	constexpr std::uint32_t numLayers(void) const { return 1U; }
 
+	/** @brief	Get the underlying sampler.
+	  */
+	const std::optional<vk::raii::Sampler>& sampler(void) const { return this->_sampler; }
+
 private:
 
 	const Engine* _pEngine = nullptr;
@@ -99,7 +105,7 @@ private:
 	vk::Extent2D _extent{};
 	jjyou::vk::VmaAllocation _imageMemory{ nullptr };
 	vk::raii::ImageView _imageView{ nullptr };
-
+	std::optional<vk::raii::Sampler> _sampler = std::nullopt;
 };
 
 /***********************************************************************

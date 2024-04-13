@@ -76,8 +76,8 @@ Surface<_materialType>::Surface(const Engine& engine_) :
 	{
 		vk::SamplerCreateInfo samplerCreateInfo = vk::SamplerCreateInfo()
 			.setFlags(vk::SamplerCreateFlags(0))
-			.setMagFilter(vk::Filter::eNearest)
-			.setMinFilter(vk::Filter::eNearest)
+			.setMagFilter(vk::Filter::eLinear)
+			.setMinFilter(vk::Filter::eLinear)
 			.setMipmapMode(vk::SamplerMipmapMode::eLinear)
 			.setAddressModeU(vk::SamplerAddressMode::eClampToEdge)
 			.setAddressModeV(vk::SamplerAddressMode::eClampToEdge)
