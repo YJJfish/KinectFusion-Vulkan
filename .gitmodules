@@ -4,3 +4,6 @@
 [submodule "dep/VulkanMemoryAllocator"]
 	path = dep/VulkanMemoryAllocator
 	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
+[submodule "dep/eigen"]
+	path = dep/eigen
+	url = https://gitlab.com/libeigen/eigen.git
