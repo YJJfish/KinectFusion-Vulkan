@@ -11,6 +11,7 @@ Implementation of KinectFusion based on Vulkan
 - [STB Image](https://github.com/nothings/stb)
 - [jjyouLib](https://github.com/YJJfish/jjyouLib)
 
-You only need to install Vulkan SDK. Other dependencies are already included in this repository.
+You only need to install Vulkan SDK. Other dependencies are already included as submodules in this repository.
 
 ## Build
+
