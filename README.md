@@ -8,8 +8,9 @@ Implementation of KinectFusion based on Vulkan
 - [Eigen](https://eigen.tuxfamily.org/index.php?title=Main_Page)
 - [ImGui](https://github.com/ocornut/imgui)
 - [Vulkan Memory Allocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator)
+- [STB Image](https://github.com/nothings/stb)
 - [jjyouLib](https://github.com/YJJfish/jjyouLib)
 
-You only need to install Vulkan SDK and GLFW. Other dependencies are already included in this repository.
+You only need to install Vulkan SDK. Other dependencies are already included in this repository.
 
 ## Build

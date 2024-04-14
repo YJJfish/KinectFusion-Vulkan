@@ -13,3 +13,6 @@
 [submodule "dep/jjyouLib"]
 	path = dep/jjyouLib
 	url = https://github.com/YJJfish/jjyouLib.git
+[submodule "dep/stb"]
+	path = dep/stb
+	url = https://github.com/nothings/stb.git
