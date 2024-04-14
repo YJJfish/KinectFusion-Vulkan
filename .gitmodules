@@ -4,3 +4,12 @@
 [submodule "dep/VulkanMemoryAllocator"]
 	path = dep/VulkanMemoryAllocator
 	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
+[submodule "dep/eigen"]
+	path = dep/eigen
+	url = https://gitlab.com/libeigen/eigen.git
+[submodule "dep/imgui"]
+	path = dep/imgui
+	url = https://github.com/ocornut/imgui.git
+[submodule "dep/jjyouLib"]
+	path = dep/jjyouLib
+	url = https://github.com/YJJfish/jjyouLib.git
