@@ -112,12 +112,15 @@ Surface<_materialType>::Surface(const Engine& engine_) :
 
 template <MaterialType _materialType>
 Surface<_materialType>& Surface<_materialType>::createTextures(
-		std::array<vk::Extent2D, Surface::numTextures> extents_,
-		std::optional<std::array<const void*, Surface::numTextures>> data_
+	std::array<vk::Extent2D, Surface::numTextures> extents_,
+	std::optional<std::array<const void*, Surface::numTextures>> data_,
+	bool waitIdle_
 ) {
 	// Wait graphics and compute queues to be idle.
-	this->_pEngine->context().queue(jjyou::vk::Context::QueueType::Main)->waitIdle();
-	this->_pEngine->context().queue(jjyou::vk::Context::QueueType::Compute)->waitIdle();
+	if (waitIdle_) {
+		this->_pEngine->context().queue(jjyou::vk::Context::QueueType::Main)->waitIdle();
+		this->_pEngine->context().queue(jjyou::vk::Context::QueueType::Compute)->waitIdle();
+	}
 	constexpr std::array<vk::Format, 3> formats = { {
 		vk::Format::eR8G8B8A8Unorm,
 		vk::Format::eR32Sfloat,

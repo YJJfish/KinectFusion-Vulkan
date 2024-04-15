@@ -5,6 +5,7 @@
 #include <jjyou/vis/CameraView.hpp>
 #include <optional>
 #include <memory>
+#include <filesystem>
 
 /***********************************************************************
  * @enum	FrameState
@@ -29,7 +30,7 @@ struct FrameData {
 	const ColorPixel* colorMap = nullptr; // The memory should be valid until next `getFrame` call.
 	const DepthPixel* depthMap = nullptr; // The memory should be valid until next `getFrame` call.
 	jjyou::glsl::mat3 projection{ 1.0f };
-	std::optional<jjyou::glsl::mat4> view = std::nullopt;
+	std::optional<jjyou::glsl::mat4> view = std::nullopt; // Optional view matrix that transforms objects from world space to camera space.
 };
 
 /***********************************************************************
@@ -186,6 +187,101 @@ private:
 	jjyou::glsl::mat3 _projection{};
 	jjyou::glsl::mat4 _initialPose{};
 	jjyou::vis::SceneView _sceneViewer{};
+	std::unique_ptr<FrameData::ColorPixel[]> _colorMap{};
+	std::unique_ptr<FrameData::DepthPixel[]> _depthMap{};
+
+};
+
+/***********************************************************************
+ * @class	ImageFolder
+ * @brief	Data loader that loads color / depth images from the disk.
+ * 
+ * This data loader loads color and depth images from two folders. Images
+ * will be read in alphabetical order according to their file names.
+ * This class makes the following assumptions:
+ *  - There are only images in the folders.
+ *  - Color and depth images match with each other, in alphabetical order.
+ *  - All color images have the same size. All depth images have the same size.
+ *  - Intrinsics parameters are fixed, passed to the loader at construction time.
+ *  - Extrinsics parameters can optionally be passed to the loader at construction time.
+ * Feel free to copy this class' code to implement your data loader.
+ ***********************************************************************/
+class ImageFolder : public DataLoader {
+
+public:
+
+	/** @brief	Constructor.
+	  * @param	colorFolder_	Path to the folder of color images.
+	  * @param	depthFolder_	Path to the folder of depth images.
+	  * @param	depthScale_		Scale factor to apply to the depth images.
+	  *							For 8 bit images, the final depth value will be `pixel / 255.0f * depthScale_`.
+	  *							For 16 bit images, the final depth value will be `pixel / 65535.0f * depthScale_`.
+	  * @param	projection_		3x3 camera projection matrix.
+	  * @param	views_			4x4 camera view matrices that transforms objects in world space to camera space.
+	  */
+	ImageFolder(
+		const std::filesystem::path& colorFolder_,
+		const std::filesystem::path& depthFolder_,
+		float depthScale_,
+		const jjyou::glsl::mat3& projection_,
+		std::optional<std::vector<jjyou::glsl::mat4>> views_,
+		float minDepth_,
+		float maxDepth_,
+		float invalidDepth_
+	);
+
+	/** @brief	Disable copy/move constructor/assignment.
+	  */
+	ImageFolder(const ImageFolder&) = delete;
+	ImageFolder(ImageFolder&&) = delete;
+	ImageFolder& operator=(const ImageFolder&) = delete;
+	ImageFolder& operator=(ImageFolder&&) = delete;
+
+	/** @brief	Destructor.
+	  */
+	virtual ~ImageFolder(void) override {}
+
+	/** @brief	Get the size of input color frames.
+	  */
+	virtual vk::Extent2D colorFrameExtent(void) override { return this->_colorFrameExtent; }
+
+	/** @brief	Get the size of input depth frames.
+	  */
+	virtual vk::Extent2D depthFrameExtent(void) override { return this->_depthFrameExtent; }
+
+	/** @brief	Get the lower bound of valid depth.
+	  */
+	virtual float minDepth(void) override { return 0.1f; }
+
+	/** @brief	Get the upper bound of valid depth.
+	  */
+	virtual float maxDepth(void) override { return 10.0f; }
+
+	/** @brief	Get the invalid depth value.
+	  */
+	virtual float invalidDepth(void) override { return this->maxDepth(); }
+
+	/** @brief	Get the initial pose for the first frame.
+	  */
+	virtual jjyou::glsl::mat4 initialPose(void) override { return this->_views.has_value() ? (*this->_views)[0] : jjyou::glsl::mat4(1.0f); }
+
+	/** @brief	Get a new frame.
+	  */
+	virtual FrameData getFrame(void) override;
+
+private:
+
+	std::vector<std::filesystem::path> _colorFrameNames{};
+	std::vector<std::filesystem::path> _depthFrameNames{};
+	float _depthScale = 0.0f;
+	jjyou::glsl::mat3 _projection{};
+	std::optional<std::vector<jjyou::glsl::mat4>> _views = std::nullopt;
+	vk::Extent2D _colorFrameExtent;
+	vk::Extent2D _depthFrameExtent;
+	float _minDepth = 0.0f;
+	float _maxDepth = 100.0f;
+	float _invalidDepth = 0.0f;
+	std::uint32_t _frameIndex = 0;
 	std::unique_ptr<FrameData::ColorPixel[]> _colorMap{};
 	std::unique_ptr<FrameData::DepthPixel[]> _depthMap{};
 

@@ -8,9 +8,15 @@
 	if (vk::Result err = (value); err != vk::Result::eSuccess) { VK_THROW(err); }
 
 template <MaterialType _materialType, PrimitiveType _primitiveType>
-Primitives<_materialType, _primitiveType>& Primitives<_materialType, _primitiveType>::setVertexData(const Vertex<_materialType>* data_, std::uint32_t numVertices_) {
+Primitives<_materialType, _primitiveType>& Primitives<_materialType, _primitiveType>::setVertexData(
+	const Vertex<_materialType>* data_,
+	std::uint32_t numVertices_,
+	bool waitIdle_
+) {
 	// Wait graphics queue to be idle.
-	this->_pEngine->context().queue(jjyou::vk::Context::QueueType::Main)->waitIdle();
+	if (waitIdle_) {
+		this->_pEngine->context().queue(jjyou::vk::Context::QueueType::Main)->waitIdle();
+	}
 	vk::DeviceSize bufferSize = sizeof(Vertex<_materialType>) * numVertices_;
 	// 0. Create one transfer command buffer, two graphics command buffer, two semaphores and three fences.
 	// 1. Graphics command buffer 0 releases ownership

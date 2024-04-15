@@ -173,7 +173,8 @@ public:
 	  */
 	Surface& createTextures(
 		std::array<vk::Extent2D, Surface::numTextures> extents_,
-		std::optional<std::array<const void*, Surface::numTextures>> data_ = std::nullopt
+		std::optional<std::array<const void*, Surface::numTextures>> data_,
+		bool waitIdle_
 	);
 
 	/** @brief	Bind the sampler descriptor set.

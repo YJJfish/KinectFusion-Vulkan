@@ -187,19 +187,19 @@ public:
 	/** @brief	Set the vertex buffer from CPU data.
 	  */
 	template <size_t _length>
-	Primitives& setVertexData(const std::array<Vertex<_materialType>, _length>& data_) {
-		return this->setVertexData(data_.data(), static_cast<std::uint32_t>(data_.size()));
+	Primitives& setVertexData(const std::array<Vertex<_materialType>, _length>& data_, bool waitIdle_) {
+		return this->setVertexData(data_.data(), static_cast<std::uint32_t>(data_.size()), waitIdle_);
 	}
 
 	/** @brief	Set the vertex buffer from CPU data.
 	  */
-	Primitives& setVertexData(const std::vector<Vertex<_materialType>>& data_) {
-		return this->setVertexData(data_.data(), static_cast<std::uint32_t>(data_.size()));
+	Primitives& setVertexData(const std::vector<Vertex<_materialType>>& data_, bool waitIdle_) {
+		return this->setVertexData(data_.data(), static_cast<std::uint32_t>(data_.size()), waitIdle_);
 	}
 
 	/** @brief	Set the vertex buffer from CPU data.
 	  */
-	Primitives& setVertexData(const Vertex<_materialType>* data_, std::uint32_t numVertices_);
+	Primitives& setVertexData(const Vertex<_materialType>* data_, std::uint32_t numVertices_, bool waitIdle_);
 
 	/** @brief	Get the number of vertices.
 	  */

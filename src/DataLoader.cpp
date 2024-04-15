@@ -1,4 +1,7 @@
 #include "DataLoader.hpp"
+#include <exception>
+#include <stdexcept>
+#include <stb_image.h>
 
 VirtualDataLoader::VirtualDataLoader(
 	vk::Extent2D extent_,
@@ -16,7 +19,7 @@ VirtualDataLoader::VirtualDataLoader(
 }
 
 FrameData VirtualDataLoader::getFrame(void) {
-	FrameData res;
+	FrameData res{};
 	res.state = FrameState::Valid;
 	res.frameIndex = this->_frameIndex;
 	res.colorMap = this->_colorMap.get();
@@ -62,4 +65,105 @@ FrameData VirtualDataLoader::getFrame(void) {
 	this->_sceneViewer.turn(dYaw, dPitch, 0.0f);
 	++this->_frameIndex;
 	return res;
+}
+
+ImageFolder::ImageFolder(
+	const std::filesystem::path& colorFolder_,
+	const std::filesystem::path& depthFolder_,
+	float depthScale_,
+	const jjyou::glsl::mat3& projection_,
+	std::optional<std::vector<jjyou::glsl::mat4>> views_,
+	float minDepth_,
+	float maxDepth_,
+	float invalidDepth_
+) :
+	DataLoader(),
+	_colorFrameNames(),
+	_depthFrameNames(),
+	_depthScale(depthScale_),
+	_projection(projection_),
+	_views(std::move(views_)),
+	_colorFrameExtent(),
+	_depthFrameExtent(),
+	_minDepth(minDepth_),
+	_maxDepth(maxDepth_),
+	_invalidDepth(invalidDepth_),
+	_frameIndex(0),
+	_colorMap(),
+	_depthMap()
+{
+	for (const auto& entry : std::filesystem::directory_iterator(colorFolder_))
+		this->_colorFrameNames.push_back(entry.path());
+	for (const auto& entry : std::filesystem::directory_iterator(depthFolder_))
+		this->_depthFrameNames.push_back(entry.path());
+	if (this->_colorFrameNames.empty())
+		throw std::runtime_error("[ImageFolder] Color image folder is empty.");
+	if (this->_colorFrameNames.size() != this->_depthFrameNames.size())
+		throw std::runtime_error("[ImageFolder] The number of color frames does not equal to that of depth frames.");
+	if (this->_views.has_value() && this->_views->size() != this->_colorFrameNames.size())
+		throw std::runtime_error("[ImageFolder] The number of view matrices does not equal to that of color frames.");
+	std::sort(this->_colorFrameNames.begin(), this->_colorFrameNames.end());
+	std::sort(this->_depthFrameNames.begin(), this->_depthFrameNames.end());
+	// Load the first frame and extract image sizes.
+	{
+		int colorExtentX{}, colorExtentY{}, colorChannel{};
+		int result = stbi_info(this->_colorFrameNames.front().string().c_str(), &colorExtentX, &colorExtentY, &colorChannel);
+		if (result == 0) throw std::runtime_error("[ImageFolder] Failed to load " + this->_colorFrameNames.front().string() + ".");
+		this->_colorFrameExtent = vk::Extent2D(static_cast<std::uint32_t>(colorExtentX), static_cast<std::uint32_t>(colorExtentY));
+		this->_colorMap.reset(new FrameData::ColorPixel[this->_colorFrameExtent.width * this->_colorFrameExtent.height]{});
+	}
+	{
+		int depthExtentX{}, depthExtentY{}, depthChannel{};
+		int result = stbi_info(this->_depthFrameNames.front().string().c_str(), &depthExtentX, &depthExtentY, &depthChannel);
+		if (result == 0) throw std::runtime_error("[ImageFolder] Failed to load " + this->_depthFrameNames.front().string() + ".");
+		this->_depthFrameExtent = vk::Extent2D(static_cast<std::uint32_t>(depthExtentX), static_cast<std::uint32_t>(depthExtentY));
+		this->_depthMap.reset(new FrameData::DepthPixel[this->_depthFrameExtent.width * this->_depthFrameExtent.height]{});
+	}
+}
+
+FrameData ImageFolder::getFrame(void) {
+	if (this->_frameIndex == static_cast<std::uint32_t>(this->_colorFrameNames.size())) {
+		FrameData res{};
+		res.state = FrameState::Eof;
+		res.frameIndex = this->_frameIndex;
+		return res;
+	}
+	FrameData res{};
+	res.state = FrameState::Valid;
+	res.frameIndex = this->_frameIndex;
+	res.colorMap = this->_colorMap.get();
+	res.depthMap = this->_depthMap.get();
+	res.projection = this->_projection;
+	if (this->_views.has_value())
+		res.view = (*this->_views)[this->_frameIndex];
+	{
+		int colorExtentX{}, colorExtentY{}, colorChannel{};
+		std::uint8_t* colorPixels = stbi_load(this->_colorFrameNames.front().string().c_str(), &colorExtentX, &colorExtentY, &colorChannel, STBI_rgb_alpha);
+		if (colorPixels == nullptr) throw std::runtime_error("[ImageFolder] Failed to load " + this->_colorFrameNames.front().string() + ".");
+		if (static_cast<std::uint32_t>(colorExtentX) != this->_colorFrameExtent.width || static_cast<std::uint32_t>(colorExtentY) != this->_colorFrameExtent.height)
+			throw std::runtime_error("[ImageFolder] The size of image " + this->_colorFrameNames.front().string() + " does not match.");
+		memcpy(this->_colorMap.get(), colorPixels, sizeof(FrameData::ColorPixel) * static_cast<std::size_t>(this->_colorFrameExtent.width) * static_cast<std::size_t>(this->_colorFrameExtent.height));
+		stbi_image_free(colorPixels);
+	}
+	if (stbi_is_16_bit(this->_depthFrameNames.front().string().c_str())) {
+		int depthExtentX{}, depthExtentY{}, depthChannel{};
+		std::uint16_t* depthPixels = stbi_load_16(this->_depthFrameNames.front().string().c_str(), &depthExtentX, &depthExtentY, &depthChannel, STBI_grey);
+		if (depthPixels == nullptr) throw std::runtime_error("[ImageFolder] Failed to load " + this->_depthFrameNames.front().string() + ".");
+		if (static_cast<std::uint32_t>(depthExtentX) != this->_depthFrameExtent.width || static_cast<std::uint32_t>(depthExtentY) != this->_depthFrameExtent.height)
+			throw std::runtime_error("[ImageFolder] The size of image " + this->_depthFrameNames.front().string() + " does not match.");
+		for (std::size_t i = 0; i < static_cast<std::size_t>(this->_depthFrameExtent.width) * static_cast<std::size_t>(this->_depthFrameExtent.height); ++i)
+			this->_depthMap[i] = static_cast<float>(depthPixels[i]) / 65535.0f * this->_depthScale;
+		stbi_image_free(depthPixels);
+	}
+	else {
+		int depthExtentX{}, depthExtentY{}, depthChannel{};
+		std::uint8_t* depthPixels = stbi_load(this->_depthFrameNames.front().string().c_str(), &depthExtentX, &depthExtentY, &depthChannel, STBI_grey);
+		if (depthPixels == nullptr) throw std::runtime_error("[ImageFolder] Failed to load " + this->_depthFrameNames.front().string() + ".");
+		if (static_cast<std::uint32_t>(depthExtentX) != this->_depthFrameExtent.width || static_cast<std::uint32_t>(depthExtentY) != this->_depthFrameExtent.height)
+			throw std::runtime_error("[ImageFolder] The size of image " + this->_depthFrameNames.front().string() + " does not match.");
+		for (std::size_t i = 0; i < static_cast<std::size_t>(this->_depthFrameExtent.width) * static_cast<std::size_t>(this->_depthFrameExtent.height); ++i)
+			this->_depthMap[i] = static_cast<float>(depthPixels[i]) / 255.0f * this->_depthScale;
+		stbi_image_free(depthPixels);
+	}
+	++this->_frameIndex;
 }
