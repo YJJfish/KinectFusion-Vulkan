@@ -126,6 +126,12 @@ FrameData ImageFolder::getFrame(void) {
 		FrameData res{};
 		res.state = FrameState::Eof;
 		res.frameIndex = this->_frameIndex;
+		// Still return the data of the last frame.
+		res.colorMap = this->_colorMap.get();
+		res.depthMap = this->_depthMap.get();
+		res.projection = this->_projection;
+		if (this->_views.has_value())
+			res.view = this->_views->back();
 		return res;
 	}
 	FrameData res{};
@@ -138,32 +144,33 @@ FrameData ImageFolder::getFrame(void) {
 		res.view = (*this->_views)[this->_frameIndex];
 	{
 		int colorExtentX{}, colorExtentY{}, colorChannel{};
-		std::uint8_t* colorPixels = stbi_load(this->_colorFrameNames.front().string().c_str(), &colorExtentX, &colorExtentY, &colorChannel, STBI_rgb_alpha);
-		if (colorPixels == nullptr) throw std::runtime_error("[ImageFolder] Failed to load " + this->_colorFrameNames.front().string() + ".");
+		std::uint8_t* colorPixels = stbi_load(this->_colorFrameNames[this->_frameIndex].string().c_str(), &colorExtentX, &colorExtentY, &colorChannel, STBI_rgb_alpha);
+		if (colorPixels == nullptr) throw std::runtime_error("[ImageFolder] Failed to load " + this->_colorFrameNames[this->_frameIndex].string() + ".");
 		if (static_cast<std::uint32_t>(colorExtentX) != this->_colorFrameExtent.width || static_cast<std::uint32_t>(colorExtentY) != this->_colorFrameExtent.height)
-			throw std::runtime_error("[ImageFolder] The size of image " + this->_colorFrameNames.front().string() + " does not match.");
+			throw std::runtime_error("[ImageFolder] The size of image " + this->_colorFrameNames[this->_frameIndex].string() + " does not match.");
 		memcpy(this->_colorMap.get(), colorPixels, sizeof(FrameData::ColorPixel) * static_cast<std::size_t>(this->_colorFrameExtent.width) * static_cast<std::size_t>(this->_colorFrameExtent.height));
 		stbi_image_free(colorPixels);
 	}
-	if (stbi_is_16_bit(this->_depthFrameNames.front().string().c_str())) {
+	if (stbi_is_16_bit(this->_depthFrameNames[this->_frameIndex].string().c_str())) {
 		int depthExtentX{}, depthExtentY{}, depthChannel{};
-		std::uint16_t* depthPixels = stbi_load_16(this->_depthFrameNames.front().string().c_str(), &depthExtentX, &depthExtentY, &depthChannel, STBI_grey);
-		if (depthPixels == nullptr) throw std::runtime_error("[ImageFolder] Failed to load " + this->_depthFrameNames.front().string() + ".");
+		std::uint16_t* depthPixels = stbi_load_16(this->_depthFrameNames[this->_frameIndex].string().c_str(), &depthExtentX, &depthExtentY, &depthChannel, STBI_grey);
+		if (depthPixels == nullptr) throw std::runtime_error("[ImageFolder] Failed to load " + this->_depthFrameNames[this->_frameIndex].string() + ".");
 		if (static_cast<std::uint32_t>(depthExtentX) != this->_depthFrameExtent.width || static_cast<std::uint32_t>(depthExtentY) != this->_depthFrameExtent.height)
-			throw std::runtime_error("[ImageFolder] The size of image " + this->_depthFrameNames.front().string() + " does not match.");
+			throw std::runtime_error("[ImageFolder] The size of image " + this->_depthFrameNames[this->_frameIndex].string() + " does not match.");
 		for (std::size_t i = 0; i < static_cast<std::size_t>(this->_depthFrameExtent.width) * static_cast<std::size_t>(this->_depthFrameExtent.height); ++i)
 			this->_depthMap[i] = static_cast<float>(depthPixels[i]) / 65535.0f * this->_depthScale;
 		stbi_image_free(depthPixels);
 	}
 	else {
 		int depthExtentX{}, depthExtentY{}, depthChannel{};
-		std::uint8_t* depthPixels = stbi_load(this->_depthFrameNames.front().string().c_str(), &depthExtentX, &depthExtentY, &depthChannel, STBI_grey);
-		if (depthPixels == nullptr) throw std::runtime_error("[ImageFolder] Failed to load " + this->_depthFrameNames.front().string() + ".");
+		std::uint8_t* depthPixels = stbi_load(this->_depthFrameNames[this->_frameIndex].string().c_str(), &depthExtentX, &depthExtentY, &depthChannel, STBI_grey);
+		if (depthPixels == nullptr) throw std::runtime_error("[ImageFolder] Failed to load " + this->_depthFrameNames[this->_frameIndex].string() + ".");
 		if (static_cast<std::uint32_t>(depthExtentX) != this->_depthFrameExtent.width || static_cast<std::uint32_t>(depthExtentY) != this->_depthFrameExtent.height)
-			throw std::runtime_error("[ImageFolder] The size of image " + this->_depthFrameNames.front().string() + " does not match.");
+			throw std::runtime_error("[ImageFolder] The size of image " + this->_depthFrameNames[this->_frameIndex].string() + " does not match.");
 		for (std::size_t i = 0; i < static_cast<std::size_t>(this->_depthFrameExtent.width) * static_cast<std::size_t>(this->_depthFrameExtent.height); ++i)
 			this->_depthMap[i] = static_cast<float>(depthPixels[i]) / 255.0f * this->_depthScale;
 		stbi_image_free(depthPixels);
 	}
 	++this->_frameIndex;
+	return res;
 }

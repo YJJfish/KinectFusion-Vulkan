@@ -2,28 +2,49 @@
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_vulkan.h>
 #include <numbers>
+#include <fstream>
+#include <chrono>
 
 Application::Application(void) :
 	_headlessMode(false),
 	_debugMode(true)
 {
 	// Load dataset
-	/*std::filesystem::path baseDir = "E:/Courses/16-833/living_room_traj2_frei_png/";
-	
-	ImageFolder tum = ImageFolder(
-		baseDir / "rgb",
-		baseDir / "depth",
-		50000.0f,
-		jjyou::glsl::mat3(1.0f),
-		std::nullopt,
-		0.0f,
-		100.0f,
-		0.0f
-	);*/
-	this->_pDataLoader.reset(new VirtualDataLoader(
+	/*this->_pDataLoader.reset(new VirtualDataLoader(
 		vk::Extent2D(128, 128),
 		jjyou::glsl::vec3(0.0f, 0.0f, 0.0f),
 		0.5f
+	));*/
+
+	std::filesystem::path baseDir = "E:/Courses/16-833/living_room_traj2_frei_png/";
+	std::ifstream extrinsicsFile(baseDir / "livingRoom2.gt.freiburg", std::ios::in);
+	std::vector<jjyou::glsl::mat4> views;
+	jjyou::glsl::mat4 invertY(1.0f); invertY[1][1] = -1.0f;
+	for (std::uint32_t i = 0; i < 880; ++i) {
+		std::uint32_t id{};
+		jjyou::glsl::vec3 translation{};
+		jjyou::glsl::quat rotation{};
+		extrinsicsFile >> id >> translation.x >> translation.y >> translation.z >> rotation.x >> rotation.y >> rotation.z >> rotation.w;
+		jjyou::glsl::mat4 view = jjyou::glsl::mat3(rotation);
+		view[3] = jjyou::glsl::vec4(translation, 1.0f);
+		view = jjyou::glsl::inverse(invertY * view * invertY);
+		views.push_back(view);
+	}
+	float depthScale = 65535.0f / 5000.0f;
+	jjyou::glsl::mat3 projection(
+		418.2f, 0.0f, 0.0f,
+		0.0f, 480.0f, 0.0f,
+		319.5f, 239.5f, 1.0f
+	);
+	this->_pDataLoader.reset(new ImageFolder(
+		baseDir / "rgb_alphabetical",
+		baseDir / "depth_alphabetical",
+		depthScale,
+		projection,
+		views,
+		0.0f,
+		100.0f,
+		0.0f
 	));
 
 	// Create Vulkan engine
@@ -39,7 +60,7 @@ Application::Application(void) :
 		this->_pDataLoader->maxDepth(),
 		this->_pDataLoader->invalidDepth(),
 		jjyou::glsl::uvec3(512U, 512U, 512U),
-		0.005f
+		0.02f
 	));
 
 	// Init assets
@@ -47,8 +68,11 @@ Application::Application(void) :
 }
 
 void Application::mainLoop(void) {
-	std::uint32_t frameIndex = 0;
+	std::uint32_t resourceCycleCounter = 0;
 	FrameData frameData{};
+	std::chrono::steady_clock::time_point timer{};
+	std::uint32_t numFramesSinceLastTimer = 0U;
+	std::uint32_t fps = 0U;
 	// UI
 	struct {
 		struct {
@@ -65,11 +89,24 @@ void Application::mainLoop(void) {
 			bool trackCamera = false;
 		} visualization;
 	} ui;
+
 	// Main loop
+	timer = std::chrono::steady_clock::now();
 	while (!this->_pEngine->window().windowShouldClose()) {
+		// Compute FPS
+		std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+		if (std::chrono::duration_cast<std::chrono::seconds>(now - timer).count()) {
+			timer = now;
+			fps = numFramesSinceLastTimer;
+			numFramesSinceLastTimer = 0U;
+		}
+		++numFramesSinceLastTimer;
 		// Prepare the new frame
-		frameData = this->_pDataLoader->getFrame();
+		if (frameData.state != FrameState::Eof) {
+			frameData = this->_pDataLoader->getFrame();
+		}
 		this->_pEngine->prepareFrame();
+
 		// Draw UI
 		if (ImGui::Begin("KinectFusion")) {
 			if (ImGui::TreeNode("AR")) {
@@ -92,20 +129,31 @@ void Application::mainLoop(void) {
 				ImGui::Checkbox("Track camera", &ui.visualization.trackCamera);
 				ImGui::TreePop();
 			}
+			if (ImGui::TreeNode("Info")) {
+				ImGui::Text("Frame index: %d", frameData.frameIndex);
+				ImGui::Text("Frame state: %s", to_string(frameData.state).c_str());
+				ImGui::Text("FPS: %d", fps);
+				ImGui::TreePop();
+			}
 		}
 		ImGui::End();
-		// Upload the new frame
-		this->_inputMaps[frameIndex].createTextures(
-			{ {this->_pDataLoader->colorFrameExtent(), this->_pDataLoader->depthFrameExtent()} },
-			{ {frameData.colorMap, frameData.depthMap} },
-			false
-		);
-		// Fuse the new frame
-		this->_pKinectFusion->fuse(
-			this->_inputMaps[frameIndex],
-			frameData.projection,
-			*frameData.view
-		);
+
+		// Process the new frame
+		if (frameData.state != FrameState::Eof && frameData.state != FrameState::Invalid) {
+			// Upload the new frame
+			this->_inputMaps[resourceCycleCounter].createTextures(
+				{ {this->_pDataLoader->colorFrameExtent(), this->_pDataLoader->depthFrameExtent()} },
+				{ {frameData.colorMap, frameData.depthMap} },
+				false
+			);
+			// Fuse the new frame
+			this->_pKinectFusion->fuse(
+				this->_inputMaps[resourceCycleCounter],
+				frameData.projection,
+				*frameData.view
+			);
+		}
+		
 		// Adjust camera frame vertices
 		
 		// Draw AR sphere
@@ -117,45 +165,51 @@ void Application::mainLoop(void) {
 		if (ui.ar.drawARSphere) {
 			jjyou::glsl::mat4 model(1.0);
 			model[0][0] = model[1][1] = model[2][2] = ui.ar.scale;
-			model[3] += jjyou::glsl::vec4(ui.ar.position, 0.0f);
+			model[3] = jjyou::glsl::vec4(ui.ar.position, 0.0f);
 			this->_pEngine->drawPrimitives(this->_arSphere, model);
 		}
+
+		// Reset the volume if requested
 		if (ui.fusion.resetVolume) {
 			ui.fusion.resetVolume = false;
 			this->_pKinectFusion->initTSDFVolume();
 		}
+
 		// Ray casting for visualization
 		if (ui.visualization.rayCasting) {
 			// Resize the ray casting map if its size does not match the window framebuffer
 			std::pair<int, int> framebufferSize = this->_pEngine->window().framebufferSize();
 			vk::Extent2D rayCastingExtent = vk::Extent2D(static_cast<std::uint32_t>(framebufferSize.first), static_cast<std::uint32_t>(framebufferSize.second));
-			if (this->_rayCastingMaps[frameIndex].texture(0).extent() != rayCastingExtent)
-				this->_rayCastingMaps[frameIndex].createTextures(
+			if (this->_rayCastingMaps[resourceCycleCounter].texture(0).extent() != rayCastingExtent)
+				this->_rayCastingMaps[resourceCycleCounter].createTextures(
 					{ {rayCastingExtent, rayCastingExtent, rayCastingExtent} },
 					std::nullopt,
 					false
 				);
-			// Ray casting for visualization
+			// Ray casting
 			jjyou::glsl::mat3 projection = jjyou::glsl::pinhole(std::numbers::pi_v<float> / 3.0f, rayCastingExtent.width, rayCastingExtent.height);
 			this->_pKinectFusion->rayCasting(
-				this->_rayCastingMaps[frameIndex],
+				this->_rayCastingMaps[resourceCycleCounter],
 				projection,
 				this->_pEngine->window().getViewMatrix(),
 				0.01f, 100.0f,
 				100000.0f,
 				std::nullopt
 			);
-			this->_pEngine->drawSurface(this->_rayCastingMaps[frameIndex]);
+			this->_pEngine->drawSurface(this->_rayCastingMaps[resourceCycleCounter]);
 		}
+
 		// Draw world space axis
 		this->_pEngine->drawPrimitives(this->_axis, jjyou::glsl::mat4(1.0f));
+
 		// Draw camera space axis
 		this->_pEngine->drawPrimitives(this->_axis, jjyou::glsl::inverse(*frameData.view));
+		
 		// Record command buffer and present frame.
 		this->_pEngine->recordCommandbuffer();
 		this->_pEngine->presentFrame();
 		this->_pEngine->window().pollEvents();
-		frameIndex = (frameIndex + 1) % Engine::NUM_FRAMES_IN_FLIGHT;
+		resourceCycleCounter = (resourceCycleCounter + 1) % Engine::NUM_FRAMES_IN_FLIGHT;
 	}
 }
 

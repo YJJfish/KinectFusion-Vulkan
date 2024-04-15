@@ -17,6 +17,21 @@ enum class FrameState {
 	Eof			/**< Sensor closed / Dataset reached the end. No more new frames. */
 };
 
+/** @brief	Helper function to convert FrameState to std::string
+  */
+inline std::string to_string(FrameState frameState_) {
+	switch (frameState_) {
+	case FrameState::Valid:
+		return "Valid";
+	case FrameState::Invalid:
+		return "Invalid";
+	case FrameState::Eof:
+		return "Eof";
+	default:
+		return "Undefined";
+	}
+}
+
 /***********************************************************************
  * @class	FrameData
  * @brief	A structure containing information about a single frame.
