@@ -106,7 +106,7 @@ vk::Result Engine::presentFrame(void) {
 void Engine::recordCommandbuffer(void) const {
 	// Begin render pass
 	std::vector<vk::ClearValue> clearValues = {
-		vk::ClearValue(vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f)),
+		vk::ClearValue(vk::ClearColorValue(std::array<float, 4>{{0.0f, 0.0f, 0.0f, 1.0f}})),
 		vk::ClearValue(vk::ClearDepthStencilValue(1.0f, 0))
 	};
 	vk::RenderPassBeginInfo renderPassBeginInfo = vk::RenderPassBeginInfo()
