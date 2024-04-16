@@ -60,7 +60,7 @@ struct Vertex<MaterialType::Simple> {
 	}
 
 	static constexpr std::vector<vk::VertexInputAttributeDescription> getInputAttributeDescriptions(void) {
-		std::vector<vk::VertexInputAttributeDescription> ret{
+		return std::vector<vk::VertexInputAttributeDescription>{
 			// layout(location = 0) in vec3 inPosition
 			vk::VertexInputAttributeDescription(
 				0,
@@ -76,7 +76,6 @@ struct Vertex<MaterialType::Simple> {
 				offsetof(Vertex, color)
 			),
 		};
-		return ret;
 	}
 
 };
@@ -104,7 +103,7 @@ struct Vertex<MaterialType::Lambertian> {
 	}
 
 	static constexpr std::vector<vk::VertexInputAttributeDescription> getInputAttributeDescriptions(void) {
-		std::vector<vk::VertexInputAttributeDescription> ret{
+		return std::vector<vk::VertexInputAttributeDescription>{
 			// layout(location = 0) in vec3 inPosition;
 			vk::VertexInputAttributeDescription(
 				0,
@@ -127,7 +126,6 @@ struct Vertex<MaterialType::Lambertian> {
 				offsetof(Vertex, color)
 			),
 		};
-		return ret;
 	}
 
 };
