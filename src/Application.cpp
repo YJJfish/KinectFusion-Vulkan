@@ -10,13 +10,13 @@ Application::Application(void) :
 	_debugMode(true)
 {
 	// Load dataset
-	/*this->_pDataLoader.reset(new VirtualDataLoader(
+	this->_pDataLoader.reset(new VirtualDataLoader(
 		vk::Extent2D(128, 128),
 		jjyou::glsl::vec3(0.0f, 0.0f, 0.0f),
 		0.5f
-	));*/
+	));
 
-	std::filesystem::path baseDir = "E:/Courses/16-833/living_room_traj2_frei_png/";
+	/*std::filesystem::path baseDir = "E:/Courses/16-833/living_room_traj2_frei_png/";
 	std::ifstream extrinsicsFile(baseDir / "livingRoom2.gt.freiburg", std::ios::in);
 	std::vector<jjyou::glsl::mat4> views;
 	jjyou::glsl::mat4 invertY(1.0f); invertY[1][1] = -1.0f;
@@ -45,7 +45,7 @@ Application::Application(void) :
 		0.0f,
 		100.0f,
 		0.0f
-	));
+	));*/
 
 	// Create Vulkan engine
 	this->_pEngine.reset(new Engine(this->_headlessMode, this->_debugMode));
