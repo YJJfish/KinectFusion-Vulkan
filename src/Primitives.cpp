@@ -212,9 +212,9 @@ Primitives<_materialType, _primitiveType>& Primitives<_materialType, _primitiveT
 	return *this;
 }
 
-template Primitives<MaterialType::Simple, PrimitiveType::Point>;
-template Primitives<MaterialType::Simple, PrimitiveType::Line>;
-template Primitives<MaterialType::Simple, PrimitiveType::Triangle>;
-template Primitives<MaterialType::Lambertian, PrimitiveType::Point>;
-template Primitives<MaterialType::Lambertian, PrimitiveType::Line>;
-template Primitives<MaterialType::Lambertian, PrimitiveType::Triangle>;
+template class Primitives<MaterialType::Simple, PrimitiveType::Point>;
+template class Primitives<MaterialType::Simple, PrimitiveType::Line>;
+template class Primitives<MaterialType::Simple, PrimitiveType::Triangle>;
+template class Primitives<MaterialType::Lambertian, PrimitiveType::Point>;
+template class Primitives<MaterialType::Lambertian, PrimitiveType::Line>;
+template class Primitives<MaterialType::Lambertian, PrimitiveType::Triangle>;

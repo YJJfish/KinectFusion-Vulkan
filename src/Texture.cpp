@@ -279,5 +279,5 @@ Surface<_materialType>& Surface<_materialType>::createTextures(
 	return *this;
 }
 
-template Surface<MaterialType::Simple>;
-template Surface<MaterialType::Lambertian>;
+template class Surface<MaterialType::Simple>;
+template class Surface<MaterialType::Lambertian>;
