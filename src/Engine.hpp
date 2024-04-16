@@ -189,54 +189,12 @@ private:
 	template<MaterialType _materialType, PrimitiveType _primitiveType>
 	const std::vector <_PrimitivesToDraw<_materialType, _primitiveType>>&
 		_getPrimitivesToDraw(void) const;
-	//// Simple points
 	std::vector<_PrimitivesToDraw<MaterialType::Simple, PrimitiveType::Point>> _simplePoints{};
-	template <>
-	std::vector<_PrimitivesToDraw<MaterialType::Simple, PrimitiveType::Point>>&
-		_getPrimitivesToDraw<MaterialType::Simple, PrimitiveType::Point>(void) { return this->_simplePoints; };
-	template <>
-	const std::vector<_PrimitivesToDraw<MaterialType::Simple, PrimitiveType::Point>>&
-		_getPrimitivesToDraw<MaterialType::Simple, PrimitiveType::Point>(void) const { return this->_simplePoints; };
-	//// Simple lines
 	std::vector<_PrimitivesToDraw<MaterialType::Simple, PrimitiveType::Line>> _simpleLines{};
-	template <>
-	std::vector<_PrimitivesToDraw<MaterialType::Simple, PrimitiveType::Line>>&
-		_getPrimitivesToDraw<MaterialType::Simple, PrimitiveType::Line>(void) { return this->_simpleLines; };
-	template <>
-	const std::vector<_PrimitivesToDraw<MaterialType::Simple, PrimitiveType::Line>>&
-		_getPrimitivesToDraw<MaterialType::Simple, PrimitiveType::Line>(void) const { return this->_simpleLines; };
-	//// Simple triangles
 	std::vector<_PrimitivesToDraw<MaterialType::Simple, PrimitiveType::Triangle>> _simpleTriangles{};
-	template <>
-	std::vector<_PrimitivesToDraw<MaterialType::Simple, PrimitiveType::Triangle>>&
-		_getPrimitivesToDraw<MaterialType::Simple, PrimitiveType::Triangle>(void) { return this->_simpleTriangles; };
-	template <>
-	const std::vector<_PrimitivesToDraw<MaterialType::Simple, PrimitiveType::Triangle>>&
-		_getPrimitivesToDraw<MaterialType::Simple, PrimitiveType::Triangle>(void) const { return this->_simpleTriangles; };
-	//// Lambertian points
 	std::vector<_PrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Point>> _lambertianPoints{};
-	template <>
-	std::vector<_PrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Point>>&
-		_getPrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Point>(void) { return this->_lambertianPoints; };
-	template <>
-	const std::vector<_PrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Point>>&
-		_getPrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Point>(void) const { return this->_lambertianPoints; };
-	//// Lambertian lines
 	std::vector<_PrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Line>> _lambertianLines{};
-	template <>
-	std::vector<_PrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Line>>&
-		_getPrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Line>(void) { return this->_lambertianLines; };
-	template <>
-	const std::vector<_PrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Line>>&
-		_getPrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Line>(void) const { return this->_lambertianLines; };
-	//// Lambertian triangles
 	std::vector<_PrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Triangle>> _lambertianTriangles{};
-	template <>
-	std::vector<_PrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Triangle>>&
-		_getPrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Triangle>(void) { return this->_lambertianTriangles; };
-	template <>
-	const std::vector<_PrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Triangle>>&
-		_getPrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Triangle>(void) const { return this->_lambertianTriangles; };
 	/// Surfaces
 	template<MaterialType _materialType>
 	std::vector<const Surface<_materialType>*>&
@@ -244,22 +202,8 @@ private:
 	template<MaterialType _materialType>
 	const std::vector<const Surface<_materialType>*>&
 		_getSurfacesToDraw(void) const;
-	//// Simple surfaces
 	std::vector<const Surface<MaterialType::Simple>*> _simpleSurfaces{};
-	template <>
-	std::vector<const Surface<MaterialType::Simple>*>&
-		_getSurfacesToDraw(void) { return this->_simpleSurfaces; };
-	template <>
-	const std::vector<const Surface<MaterialType::Simple>*>&
-		_getSurfacesToDraw(void) const { return this->_simpleSurfaces; };
-	//// Lambertian surfaces
 	std::vector<const Surface<MaterialType::Lambertian>*> _lambertianSurfaces{};
-	template <>
-	std::vector<const Surface<MaterialType::Lambertian>*>&
-		_getSurfacesToDraw(void) { return this->_lambertianSurfaces; };
-	template <>
-	const std::vector<const Surface<MaterialType::Lambertian>*>&
-		_getSurfacesToDraw(void) const { return this->_lambertianSurfaces; };
 
 	// Initialization functions
 	void _createContext(void);
@@ -277,3 +221,60 @@ private:
 	void _createFrameData(void);
 	void _resizeRenderResources(void);
 };
+
+//// Simple points
+template <>
+inline std::vector<Engine::_PrimitivesToDraw<MaterialType::Simple, PrimitiveType::Point>>&
+Engine::_getPrimitivesToDraw<MaterialType::Simple, PrimitiveType::Point>(void) { return this->_simplePoints; };
+template <>
+inline const std::vector<Engine::_PrimitivesToDraw<MaterialType::Simple, PrimitiveType::Point>>&
+Engine::_getPrimitivesToDraw<MaterialType::Simple, PrimitiveType::Point>(void) const { return this->_simplePoints; };
+//// Simple lines
+template <>
+inline std::vector<Engine::_PrimitivesToDraw<MaterialType::Simple, PrimitiveType::Line>>&
+Engine::_getPrimitivesToDraw<MaterialType::Simple, PrimitiveType::Line>(void) { return this->_simpleLines; };
+template <>
+inline const std::vector<Engine::_PrimitivesToDraw<MaterialType::Simple, PrimitiveType::Line>>&
+Engine::_getPrimitivesToDraw<MaterialType::Simple, PrimitiveType::Line>(void) const { return this->_simpleLines; };
+//// Simple triangles
+template <>
+inline std::vector<Engine::_PrimitivesToDraw<MaterialType::Simple, PrimitiveType::Triangle>>&
+Engine::_getPrimitivesToDraw<MaterialType::Simple, PrimitiveType::Triangle>(void) { return this->_simpleTriangles; };
+template <>
+inline const std::vector<Engine::_PrimitivesToDraw<MaterialType::Simple, PrimitiveType::Triangle>>&
+Engine::_getPrimitivesToDraw<MaterialType::Simple, PrimitiveType::Triangle>(void) const { return this->_simpleTriangles; };
+//// Lambertian points
+template <>
+inline std::vector<Engine::_PrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Point>>&
+Engine::_getPrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Point>(void) { return this->_lambertianPoints; };
+template <>
+inline const std::vector<Engine::_PrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Point>>&
+Engine::_getPrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Point>(void) const { return this->_lambertianPoints; };
+//// Lambertian lines
+template <>
+inline std::vector<Engine::_PrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Line>>&
+Engine::_getPrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Line>(void) { return this->_lambertianLines; };
+template <>
+inline const std::vector<Engine::_PrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Line>>&
+Engine::_getPrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Line>(void) const { return this->_lambertianLines; };
+//// Lambertian triangles
+template <>
+inline std::vector<Engine::_PrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Triangle>>&
+Engine::_getPrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Triangle>(void) { return this->_lambertianTriangles; };
+template <>
+inline const std::vector<Engine::_PrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Triangle>>&
+Engine::_getPrimitivesToDraw<MaterialType::Lambertian, PrimitiveType::Triangle>(void) const { return this->_lambertianTriangles; };
+//// Simple surfaces
+template <>
+inline std::vector<const Surface<MaterialType::Simple>*>&
+Engine::_getSurfacesToDraw(void) { return this->_simpleSurfaces; };
+template <>
+inline const std::vector<const Surface<MaterialType::Simple>*>&
+Engine::_getSurfacesToDraw(void) const { return this->_simpleSurfaces; };
+//// Lambertian surfaces
+template <>
+inline std::vector<const Surface<MaterialType::Lambertian>*>&
+Engine::_getSurfacesToDraw(void) { return this->_lambertianSurfaces; };
+template <>
+inline const std::vector<const Surface<MaterialType::Lambertian>*>&
+Engine::_getSurfacesToDraw(void) const { return this->_lambertianSurfaces; };

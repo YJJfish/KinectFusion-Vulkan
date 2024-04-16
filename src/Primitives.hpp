@@ -52,26 +52,29 @@ struct Vertex<MaterialType::Simple> {
 	vec4uc color{};
 
 	static constexpr vk::VertexInputBindingDescription getInputBindingDescription(void) {
-		return vk::VertexInputBindingDescription()
-			.setBinding(0)
-			.setStride(sizeof(Vertex<MaterialType::Simple>))
-			.setInputRate(vk::VertexInputRate::eVertex);
+		return vk::VertexInputBindingDescription(
+			0,
+			sizeof(Vertex<MaterialType::Simple>),
+			vk::VertexInputRate::eVertex
+		);
 	}
 
 	static constexpr std::vector<vk::VertexInputAttributeDescription> getInputAttributeDescriptions(void) {
 		std::vector<vk::VertexInputAttributeDescription> ret{
 			// layout(location = 0) in vec3 inPosition
-			vk::VertexInputAttributeDescription()
-			.setLocation(0)
-			.setBinding(0)
-			.setFormat(vk::Format::eR32G32B32Sfloat)
-			.setOffset(offsetof(Vertex, position)),
+			vk::VertexInputAttributeDescription(
+				0,
+				0,
+				vk::Format::eR32G32B32Sfloat,
+				offsetof(Vertex, position)
+			),
 			// layout(location = 1) in vec4 inColor
-			vk::VertexInputAttributeDescription()
-			.setLocation(1)
-			.setBinding(0)
-			.setFormat(vk::Format::eR8G8B8A8Unorm)
-			.setOffset(offsetof(Vertex, color)),
+			vk::VertexInputAttributeDescription(
+				1,
+				0,
+				vk::Format::eR8G8B8A8Unorm,
+				offsetof(Vertex, color)
+			),
 		};
 		return ret;
 	}
@@ -93,32 +96,36 @@ struct Vertex<MaterialType::Lambertian> {
 	vec4uc color{};
 
 	static constexpr vk::VertexInputBindingDescription getInputBindingDescription(void) {
-		return vk::VertexInputBindingDescription()
-			.setBinding(0)
-			.setStride(sizeof(Vertex<MaterialType::Lambertian>))
-			.setInputRate(vk::VertexInputRate::eVertex);
+		return vk::VertexInputBindingDescription(
+			0,
+			sizeof(Vertex<MaterialType::Lambertian>),
+			vk::VertexInputRate::eVertex
+		);
 	}
 
 	static constexpr std::vector<vk::VertexInputAttributeDescription> getInputAttributeDescriptions(void) {
 		std::vector<vk::VertexInputAttributeDescription> ret{
 			// layout(location = 0) in vec3 inPosition;
-			vk::VertexInputAttributeDescription()
-			.setLocation(0)
-			.setBinding(0)
-			.setFormat(vk::Format::eR32G32B32Sfloat)
-			.setOffset(offsetof(Vertex, position)),
+			vk::VertexInputAttributeDescription(
+				0,
+				0,
+				vk::Format::eR32G32B32Sfloat,
+				offsetof(Vertex, position)
+			),
 			// layout(location = 1) in vec3 inNormal;
-			vk::VertexInputAttributeDescription()
-			.setLocation(1)
-			.setBinding(0)
-			.setFormat(vk::Format::eR32G32B32Sfloat)
-			.setOffset(offsetof(Vertex, normal)),
+			vk::VertexInputAttributeDescription(
+				1,
+				0,
+				vk::Format::eR32G32B32Sfloat,
+				offsetof(Vertex, normal)
+			),
 			// layout(location = 2) in vec4 inColor;
-			vk::VertexInputAttributeDescription()
-			.setLocation(2)
-			.setBinding(0)
-			.setFormat(vk::Format::eR8G8B8A8Unorm)
-			.setOffset(offsetof(Vertex, color)),
+			vk::VertexInputAttributeDescription(
+				2,
+				0,
+				vk::Format::eR8G8B8A8Unorm,
+				offsetof(Vertex, color)
+			),
 		};
 		return ret;
 	}
