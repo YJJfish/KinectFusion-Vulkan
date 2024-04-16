@@ -53,7 +53,7 @@ target_include_directories(KinectFusion-Vulkan PUBLIC
 	./dep/imgui/
 	./dep/VulkanMemoryAllocator/include/
 	./dep/jjyouLib/include/
-	./dep/std/
+	./dep/stb/
 )
 target_link_libraries(KinectFusion-Vulkan
 	${Vulkan_LIBRARIES}
