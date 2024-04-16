@@ -59,7 +59,7 @@ struct Vertex<MaterialType::Simple> {
 		);
 	}
 
-	static constexpr std::vector<vk::VertexInputAttributeDescription> getInputAttributeDescriptions(void) {
+	static std::vector<vk::VertexInputAttributeDescription> getInputAttributeDescriptions(void) {
 		return std::vector<vk::VertexInputAttributeDescription>{
 			// layout(location = 0) in vec3 inPosition
 			vk::VertexInputAttributeDescription(
@@ -102,7 +102,7 @@ struct Vertex<MaterialType::Lambertian> {
 		);
 	}
 
-	static constexpr std::vector<vk::VertexInputAttributeDescription> getInputAttributeDescriptions(void) {
+	static std::vector<vk::VertexInputAttributeDescription> getInputAttributeDescriptions(void) {
 		return std::vector<vk::VertexInputAttributeDescription>{
 			// layout(location = 0) in vec3 inPosition;
 			vk::VertexInputAttributeDescription(
