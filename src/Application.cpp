@@ -160,7 +160,7 @@ void Application::mainLoop(void) {
 		if (ui.ar.reset) {
 			ui.ar.reset = false;
 			ui.ar.position = jjyou::glsl::vec3(0.0f);
-			ui.ar.scale = 0.0f;
+			ui.ar.scale = 0.2f;
 		}
 		if (ui.ar.drawARSphere) {
 			jjyou::glsl::mat4 model(1.0);
