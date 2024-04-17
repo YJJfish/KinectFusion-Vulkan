@@ -5,9 +5,9 @@
 
 std::size_t Window::_numGLFWWindows = 0;
 
-Window::~Window(void) {
+void Window::clear(void) {
 	if (this->_glfwWindow != nullptr) {
-		this->_surface.~SurfaceKHR();
+		this->_surface.clear();
 		glfwDestroyWindow(this->_glfwWindow);
 		this->_glfwWindow = nullptr;
 		--Window::_numGLFWWindows;

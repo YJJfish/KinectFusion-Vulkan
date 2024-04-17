@@ -165,6 +165,12 @@ public:
 	  */
 	Primitives(Primitives&& other_) = default;
 
+	/** @brief	Explicitly clear the primitives.
+	  */
+	void clear(void) {
+		this->~Primitives();
+	}
+
 	/** @brief	Destructor.
 	  */
 	~Primitives(void) = default;

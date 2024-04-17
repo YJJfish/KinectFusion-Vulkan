@@ -80,6 +80,7 @@ public:
 	  */
 	TSDFVolume& operator=(TSDFVolume&& other_) noexcept {
 		if (this != &other_) {
+			this->clear();
 			this->_pEngine = other_._pEngine;
 			this->_pKinectFusion = other_._pKinectFusion;
 			this->_descriptorSetLayout = other_._descriptorSetLayout;
@@ -93,6 +94,12 @@ public:
 			this->_descriptorSet = std::move(other_._descriptorSet);
 		}
 		return *this;
+	}
+
+	/** @brief	Explicitly clear the volume.
+	  */
+	void clear(void) {
+		this->~TSDFVolume();
 	}
 
 	/** @brief	Destructor.

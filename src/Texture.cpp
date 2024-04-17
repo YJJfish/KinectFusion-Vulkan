@@ -135,7 +135,7 @@ Surface<_materialType>& Surface<_materialType>::createTextures(
 	for (std::uint32_t i = 0; i < Surface::numTextures; ++i) {
 		if (this->_textures[i].extent() != extents_[i]) {
 			recreate = true;
-			this->_textures[i].~Texture2D();
+			this->_textures[i].clear();
 			this->_textures[i] = Texture2D(
 				*this->_pEngine,
 				formats[i],

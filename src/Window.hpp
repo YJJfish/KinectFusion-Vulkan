@@ -54,9 +54,15 @@ public:
 		other_._glfwWindow = nullptr;
 	}
 
+	/** @brief	Explicitly destroy the window
+	  */
+	void clear(void);
+
 	/** @brief	Destructor.
 	  */
-	~Window(void);
+	~Window(void) {
+		this->clear();
+	}
 
 	/** @brief	Copy assignment is disabled.
 	  */
@@ -66,7 +72,7 @@ public:
 	  */
 	Window& operator=(Window&& other_) noexcept {
 		if (this != &other_) {
-			this->~Window();
+			this->clear();
 			this->_glfwWindow = other_._glfwWindow;
 			this->_surface = std::move(other_._surface);
 			this->_sceneViewer = other_._sceneViewer;

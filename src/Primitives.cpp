@@ -64,8 +64,8 @@ Primitives<_materialType, _primitiveType>& Primitives<_materialType, _primitiveT
 	// If the new size does not equal to the old size, create a new vertex buffer.
 	if (this->_numVertices != numVertices_) {
 		this->_numVertices = numVertices_;
-		this->_vertexBufferMemory.~VmaAllocation();
-		this->_vertexBuffer.~Buffer();
+		this->_vertexBufferMemory.clear();
+		this->_vertexBuffer.clear();
 		vk::BufferCreateInfo bufferCreateInfo = vk::BufferCreateInfo()
 			.setFlags(vk::BufferCreateFlags(0))
 			.setSize(bufferSize)

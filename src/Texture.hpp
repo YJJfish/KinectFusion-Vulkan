@@ -65,6 +65,12 @@ public:
 		return *this;
 	}
 
+	/** @brief	Explicit clear the texture.
+	  */
+	void clear(void) {
+		this->~Texture2D();
+	}
+
 	/** @brief	Destructor.
 	  */
 	~Texture2D(void) = default;
@@ -137,6 +143,12 @@ public:
 	/** @brief	Move constructor.
 	  */
 	Surface(Surface&& other_) = default;
+
+	/** @brief	Explicitly clear the surface.
+	  */
+	void clear(void) {
+		this->~Surface();
+	}
 
 	/** @brief	Destructor.
 	  */
