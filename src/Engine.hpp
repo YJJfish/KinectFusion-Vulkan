@@ -80,22 +80,14 @@ public:
 	void drawPrimitives(
 		const Primitives<materialType, primitiveType>& primitives_,
 		const jjyou::glsl::mat4& modelMatrix_
-	) {
-		this->_getPrimitivesToDraw<materialType, primitiveType>().emplace_back(
-			&primitives_,
-			modelMatrix_,
-			jjyou::glsl::transpose(jjyou::glsl::inverse(modelMatrix_))
-		);
-	}
+	);
 
 	/** @brief	Add a Surface to draw.
 	  */
 	template<MaterialType materialType>
 	void drawSurface(
 		const Surface<materialType>& surface_
-	) {
-		this->_getSurfacesToDraw<materialType>().push_back(&surface_);
-	}
+	);
 
 	/** @brief	Record the command buffer. Call this function after sending all instances
 	  *			to draw to the engine via `Engine::drawPrimitives` and `Engine::drawSurface`.
@@ -278,3 +270,23 @@ Engine::_getSurfacesToDraw(void) { return this->_lambertianSurfaces; };
 template <>
 inline const std::vector<const Surface<MaterialType::Lambertian>*>&
 Engine::_getSurfacesToDraw(void) const { return this->_lambertianSurfaces; };
+
+template<MaterialType materialType, PrimitiveType primitiveType>
+inline void Engine::drawPrimitives(
+	const Primitives<materialType, primitiveType>& primitives_,
+	const jjyou::glsl::mat4& modelMatrix_
+) {
+	_PrimitivesToDraw<materialType, primitiveType> _primitivesToDraw{
+		.pPrimitives = &primitives_,
+		.modelMatrix = modelMatrix_,
+		.normalMatrix{ 1.0f } = jjyou::glsl::transpose(jjyou::glsl::inverse(modelMatrix_))
+	};
+	this->_getPrimitivesToDraw<materialType, primitiveType>().push_back(_primitivesToDraw);
+}
+
+template<MaterialType materialType>
+inline void Engine::drawSurface(
+	const Surface<materialType>& surface_
+) {
+	this->_getSurfacesToDraw<materialType>().push_back(&surface_);
+}
