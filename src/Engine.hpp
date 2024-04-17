@@ -279,7 +279,7 @@ inline void Engine::drawPrimitives(
 	_PrimitivesToDraw<materialType, primitiveType> _primitivesToDraw{
 		.pPrimitives = &primitives_,
 		.modelMatrix = modelMatrix_,
-		.normalMatrix{ 1.0f } = jjyou::glsl::transpose(jjyou::glsl::inverse(modelMatrix_))
+		.normalMatrix = jjyou::glsl::transpose(jjyou::glsl::inverse(modelMatrix_))
 	};
 	this->_getPrimitivesToDraw<materialType, primitiveType>().push_back(_primitivesToDraw);
 }
