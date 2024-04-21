@@ -1,4 +1,5 @@
 #pragma once
+#include "Camera.hpp"
 #include "Engine.hpp"
 #include "KinectFusion.hpp"
 #include "DataLoader.hpp"
