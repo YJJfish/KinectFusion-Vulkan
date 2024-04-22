@@ -31,6 +31,16 @@ enum PrimitiveType : std::size_t {
 };
 
 /***********************************************************************
+ * @enum	MemoryPattern
+ * @brief	Enum used to determine the memory pattern.
+ ***********************************************************************/
+enum class MemoryPattern : std::size_t {
+	Static,				/**< The memory is rarely modified. The memory will be device local. */
+	Dynamic,			/**< The memory is frequently modified. The memory will be host visible & coherent. */
+	NumMemoryPatterns,	/**< Used to indicate the number of memory patterns. */
+};
+
+/***********************************************************************
  * @class	Vertex
  * @brief	Vertex class that provides vertex binding information of
  *			vertex shaders
@@ -193,7 +203,7 @@ public:
 
 	/** @brief	Construct an empty collection of primitives.
 	  */
-	Primitives(const Engine& engine_) : _pEngine(&engine_) {}
+	Primitives(const Engine& engine_, MemoryPattern memoryPattern_) : _pEngine(&engine_), _memoryPattern(memoryPattern_) {}
 
 	/** @brief	Set the vertex buffer from CPU data.
 	  */
@@ -228,8 +238,10 @@ public:
 protected:
 
 	const Engine* _pEngine = nullptr;
+	MemoryPattern _memoryPattern = MemoryPattern::Static;
 	vk::raii::Buffer _vertexBuffer{ nullptr };
 	jjyou::vk::VmaAllocation _vertexBufferMemory{ nullptr };
+	void* _vertexBufferMemoryMappedAddress = nullptr; // Only for MemoryPattern::Dynamic
 	std::uint32_t _numVertices = 0U;
 
 };

@@ -9,7 +9,7 @@ VirtualDataLoader::VirtualDataLoader(
 	float length_
 ) : DataLoader(), _extent(extent_), _center(center_), _length(length_)
 {
-	this->_projection = jjyou::glsl::pinhole(std::numbers::pi_v<float> / 3.0f, this->_extent.width, this->_extent.height);
+	this->_camera = Camera::fromGraphics(std::nullopt, std::numbers::pi_v<float> / 3.0f, this->minDepth(), this->maxDepth(), this->_extent.width, this->_extent.height);
 	this->_sceneViewer.reset();
 	this->_sceneViewer.setCenter(this->_center);
 	this->_sceneViewer.setZoomRate(std::max(2.0f, 3.0f * this->_length));
@@ -24,9 +24,9 @@ FrameData VirtualDataLoader::getFrame(void) {
 	res.frameIndex = this->_frameIndex;
 	res.colorMap = this->_colorMap.get();
 	res.depthMap = this->_depthMap.get();
-	res.projection = this->_projection;
+	res.camera = this->_camera;
 	res.view = this->_sceneViewer.getViewMatrix();
-	jjyou::glsl::mat3 invProjection = jjyou::glsl::inverse(res.projection);
+	jjyou::glsl::mat3 invProjection = jjyou::glsl::inverse(this->_camera.getVisionProjection());
 	jjyou::glsl::mat4 invView = jjyou::glsl::inverse(*res.view);
 	jjyou::glsl::vec3 minCorner = this->_center - this->_length * 0.5f;
 	jjyou::glsl::vec3 maxCorner = this->_center + this->_length * 0.5f;
@@ -71,7 +71,7 @@ ImageFolder::ImageFolder(
 	const std::filesystem::path& colorFolder_,
 	const std::filesystem::path& depthFolder_,
 	float depthScale_,
-	const jjyou::glsl::mat3& projection_,
+	const Camera& camera_,
 	std::optional<std::vector<jjyou::glsl::mat4>> views_,
 	float minDepth_,
 	float maxDepth_,
@@ -81,7 +81,7 @@ ImageFolder::ImageFolder(
 	_colorFrameNames(),
 	_depthFrameNames(),
 	_depthScale(depthScale_),
-	_projection(projection_),
+	_camera(camera_),
 	_views(std::move(views_)),
 	_colorFrameExtent(),
 	_depthFrameExtent(),
@@ -129,7 +129,7 @@ FrameData ImageFolder::getFrame(void) {
 		// Still return the data of the last frame.
 		res.colorMap = this->_colorMap.get();
 		res.depthMap = this->_depthMap.get();
-		res.projection = this->_projection;
+		res.camera = this->_camera;
 		if (this->_views.has_value())
 			res.view = this->_views->back();
 		return res;
@@ -139,7 +139,7 @@ FrameData ImageFolder::getFrame(void) {
 	res.frameIndex = this->_frameIndex;
 	res.colorMap = this->_colorMap.get();
 	res.depthMap = this->_depthMap.get();
-	res.projection = this->_projection;
+	res.camera = this->_camera;
 	if (this->_views.has_value())
 		res.view = (*this->_views)[this->_frameIndex];
 	{

@@ -1,14 +1,14 @@
 #include "Engine.hpp"
 #include <iostream>
 #include <GLFW/glfw3.h>
-#include <stdexcept>
-#include <exception>
 #include <numbers>
 #include <imgui.h>
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_vulkan.h>
 
 Engine::Engine(bool headlessMode_, bool debugMode_) : _headlessMode(headlessMode_), _debugMode(debugMode_), _window(800, 600, "KinectFusion-Vulkan") {
+	if (headlessMode_)
+		throw std::logic_error("[Engine] Headless mode has not been implemented.");
 	this->_createContext();
 	this->_createAllocator();
 	this->_createCommandPools();
@@ -58,18 +58,6 @@ vk::Result Engine::prepareFrame(void) {
 	ImGui::NewFrame();
 	this->_activeFrameData().graphicsCommandBuffer.reset();
 	this->_activeFrameData().graphicsCommandBuffer.begin(vk::CommandBufferBeginInfo().setFlags(vk::CommandBufferUsageFlags(0)).setPInheritanceInfo(nullptr));
-	vk::Viewport sceneViewport = vk::Viewport()
-		.setX(0.0f)
-		.setY(0.0f)
-		.setWidth(static_cast<float>(this->_swapchain.extent().width))
-		.setHeight(static_cast<float>(this->_swapchain.extent().height))
-		.setMinDepth(0.0f)
-		.setMaxDepth(1.0f);
-	vk::Rect2D sceneScissor = vk::Rect2D()
-		.setOffset(vk::Offset2D(0, 0))
-		.setExtent(this->_swapchain.extent());
-	this->_activeFrameData().graphicsCommandBuffer.setViewport(0, sceneViewport);
-	this->_activeFrameData().graphicsCommandBuffer.setScissor(0, sceneScissor);
 	return acquireImageResult;
 }
 
@@ -104,6 +92,21 @@ vk::Result Engine::presentFrame(void) {
 }
 
 void Engine::recordCommandbuffer(void) const {
+	// Set the viewport and the scissor
+	vk::Extent2D screenExtent = this->_swapchain.extent();
+	vk::Extent2D cameraExtent = vk::Extent2D(this->getCamera().width, this->getCamera().height);
+	vk::Viewport sceneViewport = vk::Viewport()
+		.setX(static_cast<float>(screenExtent.width - cameraExtent.width) / 2.0f)
+		.setY(static_cast<float>(screenExtent.height - cameraExtent.height) / 2.0f)
+		.setWidth(static_cast<float>(cameraExtent.width))
+		.setHeight(static_cast<float>(cameraExtent.height))
+		.setMinDepth(0.0f)
+		.setMaxDepth(1.0f);
+	vk::Rect2D sceneScissor = vk::Rect2D()
+		.setOffset(vk::Offset2D(0, 0))
+		.setExtent(screenExtent);
+	this->_activeFrameData().graphicsCommandBuffer.setViewport(0, sceneViewport);
+	this->_activeFrameData().graphicsCommandBuffer.setScissor(0, sceneScissor);
 	// Begin render pass
 	std::vector<vk::ClearValue> clearValues = {
 		vk::ClearValue(vk::ClearColorValue(std::array<float, 4>{{0.0f, 0.0f, 0.0f, 1.0f}})),
@@ -117,7 +120,7 @@ void Engine::recordCommandbuffer(void) const {
 	this->_activeFrameData().graphicsCommandBuffer.beginRenderPass(renderPassBeginInfo, vk::SubpassContents::eInline);
 	// Set view level uniform data
 	jjyou::glsl::mat4 viewMatrix = this->_window.getViewMatrix();
-	jjyou::glsl::mat4 projectionMatrix = jjyou::glsl::perspective(std::numbers::pi_v<float> / 3.0f, static_cast<float>(this->_swapchain.extent().width) / static_cast<float>(this->_swapchain.extent().height), 0.01f, 100.0f);
+	jjyou::glsl::mat4 projectionMatrix = this->getCamera().getGraphicsProjection();
 	this->_activeFrameData().viewLevelDescriptorSet.cameraParameters().projection = projectionMatrix;
 	this->_activeFrameData().viewLevelDescriptorSet.cameraParameters().view = viewMatrix;
 	this->_activeFrameData().viewLevelDescriptorSet.cameraParameters().viewPos = jjyou::glsl::vec4(-jjyou::glsl::transpose(jjyou::glsl::mat3(viewMatrix)) * jjyou::glsl::vec3(viewMatrix[3]), 1.0f);
@@ -163,10 +166,28 @@ void Engine::waitIdle(void) const {
 		this->_context.queue(queueType)->waitIdle();
 }
 
+void Engine::setCameraMode(
+	Window::CameraMode cameraMode_,
+	std::optional<jjyou::glsl::mat4> viewMatrix_,
+	std::optional<Camera> camera_
+) {
+	this->_cameraMode = cameraMode_;
+	if (!this->_headlessMode)
+		this->_window.setCameraMode(cameraMode_, viewMatrix_);
+	if (cameraMode_ == Window::CameraMode::Fixed) {
+		this->_fixedCamera = *camera_;
+		if (!this->_headlessMode) {
+			vk::Extent2D swapchainExtent = this->_swapchain.extent();
+			this->_fixedCamera.scaleToFit(swapchainExtent.width, swapchainExtent.height);
+		}
+	}
+}
+
 void Engine::_createContext(void) {
 	// Create glfw window
 	//if (!this->_headlessMode)
 	//	this->_window = Window(800, 600, "KinectFusion-Vulkan");
+	this->_sceneCamera = Camera::fromGraphics(std::nullopt, std::numbers::pi_v<float> / 3.0f, 0.1f, 100.0f, 800, 600);
 	jjyou::vk::ContextBuilder contextBuilder;
 	// Instance
 	contextBuilder
@@ -768,8 +789,13 @@ void Engine::_resizeRenderResources(void) {
 		std::tie(width, height) = this->_window.framebufferSize();
 	}
 	this->_context.queue(jjyou::vk::Context::QueueType::Main)->waitIdle();
+	this->_sceneCamera = Camera::fromGraphics(std::nullopt, this->_sceneCamera.yFov, this->_sceneCamera.zNear, this->_sceneCamera.zFar, static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height));
+	if (this->_cameraMode == Window::CameraMode::Fixed) {
+		this->_fixedCamera.scaleToFit(static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height));
+	}
 	this->_createSwapchain();
 	this->_createDepthStencil();
 	this->_createFramebuffers();
 	ImGui_ImplVulkan_SetMinImageCount(this->_swapchain.numImages());
+	this->_window.getAndResetFramebufferResized();
 }

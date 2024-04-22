@@ -1,5 +1,4 @@
 #pragma once
-#include "Camera.hpp"
 #include "Engine.hpp"
 #include "KinectFusion.hpp"
 #include "DataLoader.hpp"
@@ -44,4 +43,8 @@ private:
 	std::vector<Surface<MaterialType::Lambertian>> _rayCastingMaps{};
 
 	void _initAssets(void);
+	static void _updateCameraFrame(
+		Primitives<MaterialType::Simple, PrimitiveType::Line>& cameraFrame_,
+		const Camera& camera_
+	);
 };

@@ -6,6 +6,7 @@
 #include <optional>
 #include <memory>
 #include <filesystem>
+#include "Camera.hpp"
 
 /***********************************************************************
  * @enum	FrameState
@@ -44,8 +45,8 @@ struct FrameData {
 	std::uint32_t frameIndex = 0U;
 	const ColorPixel* colorMap = nullptr; // The memory should be valid until next `getFrame` call.
 	const DepthPixel* depthMap = nullptr; // The memory should be valid until next `getFrame` call.
-	jjyou::glsl::mat3 projection{ 1.0f };
-	std::optional<jjyou::glsl::mat4> view = std::nullopt; // Optional view matrix that transforms objects from world space to camera space.
+	Camera camera{};
+	std::optional<jjyou::glsl::mat4> view = std::nullopt; // Optional ground truth view matrix that transforms objects from world space to camera space.
 };
 
 /***********************************************************************
@@ -84,9 +85,9 @@ struct FrameData {
  * 
  * Data fetching:
  *  - `FrameData getFrame(void)`
- * The dataloader can optionally provide a groundtruth camera extrinsics stored in `FrameData::view`.
+ * The dataloader can optionally provide a ground truth camera view matrix stored in `FrameData::view`.
  *  - `jjyou::glsl::mat4 initialPose(void)`
- * You may wish to set an initial pose (extrinsics for the first frame) so that the reconstructed scene
+ * You may wish to set an initial pose (view matrix for the first frame) so that the reconstructed scene
  * is centered in the TSDF volume. If you don't have any prior about the scene, just set it as identity.
  ***********************************************************************/
 class DataLoader {
@@ -199,7 +200,7 @@ private:
 	jjyou::glsl::vec3 _center{};
 	float _length = 0.0f;
 	std::uint32_t _frameIndex = 0;
-	jjyou::glsl::mat3 _projection{};
+	Camera _camera{};
 	jjyou::glsl::mat4 _initialPose{};
 	jjyou::vis::SceneView _sceneViewer{};
 	std::unique_ptr<FrameData::ColorPixel[]> _colorMap{};
@@ -231,14 +232,14 @@ public:
 	  * @param	depthScale_		Scale factor to apply to the depth images.
 	  *							For 8 bit images, the final depth value will be `pixel / 255.0f * depthScale_`.
 	  *							For 16 bit images, the final depth value will be `pixel / 65535.0f * depthScale_`.
-	  * @param	projection_		3x3 camera projection matrix.
-	  * @param	views_			4x4 camera view matrices that transforms objects in world space to camera space.
+	  * @param	camera_			Camera instance. This data loader uses fixed camera intrinsics.
+	  * @param	views_			4x4 ground truth camera view matrices that transforms objects in world space to camera space.
 	  */
 	ImageFolder(
 		const std::filesystem::path& colorFolder_,
 		const std::filesystem::path& depthFolder_,
 		float depthScale_,
-		const jjyou::glsl::mat3& projection_,
+		const Camera& camera_,
 		std::optional<std::vector<jjyou::glsl::mat4>> views_,
 		float minDepth_,
 		float maxDepth_,
@@ -289,7 +290,7 @@ private:
 	std::vector<std::filesystem::path> _colorFrameNames{};
 	std::vector<std::filesystem::path> _depthFrameNames{};
 	float _depthScale = 0.0f;
-	jjyou::glsl::mat3 _projection{};
+	Camera _camera{};
 	std::optional<std::vector<jjyou::glsl::mat4>> _views = std::nullopt;
 	vk::Extent2D _colorFrameExtent;
 	vk::Extent2D _depthFrameExtent;

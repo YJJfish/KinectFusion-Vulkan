@@ -28,6 +28,13 @@ public:
 	  */ 
 	Camera(void) = default;
 
+	/** @brief	Default copy/move constructor/assignment.
+	  */
+	Camera(const Camera&) = default;
+	Camera(Camera&&) = default;
+	Camera& operator=(const Camera&) = default;
+	Camera& operator=(Camera&&) = default;
+
 	/** @brief	Create a camera using computer graphics parameters.
 	  * @param	xFov_	(Optional) Field of view in radian in x direction.
 	  * @param	yFov_	(Optional) Field of view in radian in y direction.
@@ -141,7 +148,40 @@ public:
 		);
 	}
 
+	/** @brief	Scale to fit a new frame size
+	  */
+	void scaleToFit(std::uint32_t width_, std::uint32_t height_) {
+		float aspectRatioRestrict = static_cast<float>(width_) / static_cast<float>(height_);
+		float aspectRatioCamera = static_cast<float>(this->width) / static_cast<float>(this->height);
+		if (aspectRatioRestrict >= aspectRatioCamera) {
+			this->height = height_;
+			this->width = static_cast<std::uint32_t>(static_cast<float>(height_) * aspectRatioCamera);
+		}
+		else {
+			this->width = width_;
+			this->height = static_cast<std::uint32_t>(static_cast<float>(width_) / aspectRatioCamera);
+		}
+	}
+
+	/** @brief	Scale to fill a new frame size
+	  */
+	void scaleToFill(std::uint32_t width_, std::uint32_t height_) {
+		float aspectRatioRestrict = static_cast<float>(width_) / static_cast<float>(height_);
+		float aspectRatioCamera = static_cast<float>(this->width) / static_cast<float>(this->height);
+		if (aspectRatioRestrict < aspectRatioCamera) {
+			this->height = height_;
+			this->width = static_cast<std::uint32_t>(static_cast<float>(height_) * aspectRatioCamera);
+		}
+		else {
+			this->width = width_;
+			this->height = static_cast<std::uint32_t>(static_cast<float>(width_) / aspectRatioCamera);
+		}
+	}
+
 	/** @brief	Update the camera parameters for a new image size.
+	  * @note	Make sure that the width and height are scaled by the same factor.
+	  *			If they are not, you may wish to call `fromGraphics` to recompute
+	  *			the x/y field of view.
 	  */
 	void resize(std::uint32_t width_, std::uint32_t height_) {
 		this->width = width_;

@@ -57,7 +57,7 @@ void main() {
 		vec3 projection = baseProjection + float(z) * deltaProjection;
 		if (projection.z <= 0.0) continue;
 		// Read the depth value using the nearest pixel.
-		ivec2 nearestPixel = ivec2(projection.xy / projection.z);
+		ivec2 nearestPixel = ivec2(projection.xy / projection.z + vec2(0.5));
 		if (nearestPixel.x < 0 || nearestPixel.x >= depthFrameSize.x || nearestPixel.y < 0 || nearestPixel.y >= depthFrameSize.y)
 			continue;
 		float pixelDepth = imageLoad(surfaceDepthTexture, nearestPixel).r;

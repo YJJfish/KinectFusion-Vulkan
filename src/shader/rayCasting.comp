@@ -186,7 +186,6 @@ bool rayCasting(
 		if (!valid) {
 			// One or more surrounding voxels are zero-weighted. Continue marching.
 			lastT = currT;
-			// currT += rayCastingParameters.marchingStep;
 			currT += tsdfVolume.truncationDistance * 0.95;
 			lastTSDF = -1.0;
 			continue;
@@ -194,8 +193,7 @@ bool rayCasting(
 		else if (currTSDF > 1e-5) {
 			// Still outside of the zero-surface. Continue marching.
 			lastT = currT;
-			//currT += max(rayCastingParameters.marchingStep, tsdfVolume.truncationDistance * currTSDF * 0.95);
-			currT += tsdfVolume.truncationDistance * 0.95;
+			currT += max(rayCastingParameters.marchingStep, tsdfVolume.truncationDistance * currTSDF * 0.95);
 			lastTSDF = currTSDF;
 			continue;
 		}

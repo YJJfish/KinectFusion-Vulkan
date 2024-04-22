@@ -1,4 +1,5 @@
 #include "Application.hpp"
+#include "Camera.hpp"
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_vulkan.h>
 #include <numbers>
@@ -7,7 +8,7 @@
 
 Application::Application(void) :
 	_headlessMode(false),
-	_debugMode(true)
+	_debugMode(false)
 {
 	// Load dataset
 	/*this->_pDataLoader.reset(new VirtualDataLoader(
@@ -31,16 +32,11 @@ Application::Application(void) :
 		views.push_back(view);
 	}
 	float depthScale = 65535.0f / 5000.0f;
-	jjyou::glsl::mat3 projection(
-		418.2f, 0.0f, 0.0f,
-		0.0f, 480.0f, 0.0f,
-		319.5f, 239.5f, 1.0f
-	);
 	this->_pDataLoader.reset(new ImageFolder(
 		baseDir / "rgb_alphabetical",
 		baseDir / "depth_alphabetical",
 		depthScale,
-		projection,
+		Camera::fromVision(418.2f, 480.0f, 319.5f, 239.5f, 0.01f, 100.0f, 640, 480),
 		views,
 		0.0f,
 		100.0f,
@@ -93,6 +89,7 @@ void Application::mainLoop(void) {
 	// Main loop
 	timer = std::chrono::steady_clock::now();
 	while (!this->_pEngine->window().windowShouldClose()) {
+
 		// Compute FPS
 		std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
 		if (std::chrono::duration_cast<std::chrono::seconds>(now - timer).count()) {
@@ -101,11 +98,14 @@ void Application::mainLoop(void) {
 			numFramesSinceLastTimer = 0U;
 		}
 		++numFramesSinceLastTimer;
+
 		// Prepare the new frame
 		if (frameData.state != FrameState::Eof) {
 			frameData = this->_pDataLoader->getFrame();
 		}
-		this->_pEngine->prepareFrame();
+		vk::Result prepareFrameResult = this->_pEngine->prepareFrame();
+		if (prepareFrameResult != vk::Result::eSuccess)
+			continue;
 
 		// Draw UI
 		if (ImGui::Begin("KinectFusion")) {
@@ -149,13 +149,56 @@ void Application::mainLoop(void) {
 			// Fuse the new frame
 			this->_pKinectFusion->fuse(
 				this->_inputMaps[resourceCycleCounter],
-				frameData.projection,
+				frameData.camera.getVisionProjection(),
 				*frameData.view
 			);
 		}
-		
-		// Adjust camera frame vertices
-		
+
+		// Reset the volume if requested
+		if (ui.fusion.resetVolume) {
+			ui.fusion.resetVolume = false;
+			this->_pKinectFusion->initTSDFVolume();
+		}
+
+		// Track camera
+		if (ui.visualization.trackCamera) {
+			this->_pEngine->setCameraMode(
+				Window::CameraMode::Fixed,
+				*frameData.view,
+				frameData.camera
+			);
+		}
+		else {
+			this->_pEngine->setCameraMode(
+				Window::CameraMode::Scene,
+				std::nullopt,
+				std::nullopt
+			);
+		}
+
+		// Ray casting for visualization
+		if (ui.visualization.rayCasting) {
+			// Resize the ray casting map if its size does not match the window framebuffer
+			Camera rayCastingCamera = this->_pEngine->getCamera();
+			vk::Extent2D rayCastingExtent = vk::Extent2D(rayCastingCamera.width, rayCastingCamera.height);
+			if (this->_rayCastingMaps[resourceCycleCounter].texture(0).extent() != rayCastingExtent)
+				this->_rayCastingMaps[resourceCycleCounter].createTextures(
+					{ {rayCastingExtent, rayCastingExtent, rayCastingExtent} },
+					std::nullopt,
+					false
+				);
+			// Ray casting
+			this->_pKinectFusion->rayCasting(
+				this->_rayCastingMaps[resourceCycleCounter],
+				rayCastingCamera.getVisionProjection(),
+				this->_pEngine->window().getViewMatrix(),
+				0.01f, 100.0f,
+				100000.0f,
+				std::nullopt
+			);
+			this->_pEngine->drawSurface(this->_rayCastingMaps[resourceCycleCounter]);
+		}
+
 		// Draw AR sphere
 		if (ui.ar.reset) {
 			ui.ar.reset = false;
@@ -169,42 +212,16 @@ void Application::mainLoop(void) {
 			this->_pEngine->drawPrimitives(this->_arSphere, model);
 		}
 
-		// Reset the volume if requested
-		if (ui.fusion.resetVolume) {
-			ui.fusion.resetVolume = false;
-			this->_pKinectFusion->initTSDFVolume();
-		}
-
-		// Ray casting for visualization
-		if (ui.visualization.rayCasting) {
-			// Resize the ray casting map if its size does not match the window framebuffer
-			std::pair<int, int> framebufferSize = this->_pEngine->window().framebufferSize();
-			vk::Extent2D rayCastingExtent = vk::Extent2D(static_cast<std::uint32_t>(framebufferSize.first), static_cast<std::uint32_t>(framebufferSize.second));
-			if (this->_rayCastingMaps[resourceCycleCounter].texture(0).extent() != rayCastingExtent)
-				this->_rayCastingMaps[resourceCycleCounter].createTextures(
-					{ {rayCastingExtent, rayCastingExtent, rayCastingExtent} },
-					std::nullopt,
-					false
-				);
-			// Ray casting
-			jjyou::glsl::mat3 projection = jjyou::glsl::pinhole(std::numbers::pi_v<float> / 3.0f, rayCastingExtent.width, rayCastingExtent.height);
-			this->_pKinectFusion->rayCasting(
-				this->_rayCastingMaps[resourceCycleCounter],
-				projection,
-				this->_pEngine->window().getViewMatrix(),
-				0.01f, 100.0f,
-				100000.0f,
-				std::nullopt
-			);
-			this->_pEngine->drawSurface(this->_rayCastingMaps[resourceCycleCounter]);
-		}
-
 		// Draw world space axis
 		this->_pEngine->drawPrimitives(this->_axis, jjyou::glsl::mat4(1.0f));
 
-		// Draw camera space axis
-		this->_pEngine->drawPrimitives(this->_axis, jjyou::glsl::inverse(*frameData.view));
-		
+		// Draw camera space axis and camera space
+		if (!ui.visualization.trackCamera) {
+			this->_pEngine->drawPrimitives(this->_axis, jjyou::glsl::inverse(*frameData.view) * jjyou::glsl::mat4(jjyou::glsl::mat3(0.2f)));
+			this->_updateCameraFrame(this->_cameraFrames[resourceCycleCounter], frameData.camera);
+			this->_pEngine->drawPrimitives(this->_cameraFrames[resourceCycleCounter], jjyou::glsl::inverse(*frameData.view) * jjyou::glsl::mat4(jjyou::glsl::mat3(0.2f)));
+		}
+
 		// Record command buffer and present frame.
 		this->_pEngine->recordCommandbuffer();
 		this->_pEngine->presentFrame();
@@ -224,7 +241,7 @@ void Application::_initAssets(void) {
 			Vertex<MaterialType::Simple>{.position{0.0f, 0.0f, 0.0f}, .color{0, 0, 255, 255} },
 			Vertex<MaterialType::Simple>{.position{0.0f, 0.0f, 1.0f}, .color{0, 0, 255, 255} },
 		} };
-		this->_axis = this->_pEngine->createPrimitives<MaterialType::Simple, PrimitiveType::Line>();
+		this->_axis = this->_pEngine->createPrimitives<MaterialType::Simple, PrimitiveType::Line>(MemoryPattern::Static);
 		this->_axis.setVertexData(axisData, false);
 	}
 	// AR sphere
@@ -267,14 +284,14 @@ void Application::_initAssets(void) {
 					sphereData.push_back(vertices[index]);
 			}
 		}
-		this->_arSphere = this->_pEngine->createPrimitives<MaterialType::Lambertian, PrimitiveType::Triangle>();
+		this->_arSphere = this->_pEngine->createPrimitives<MaterialType::Lambertian, PrimitiveType::Triangle>(MemoryPattern::Static);
 		this->_arSphere.setVertexData(sphereData, false);
 	}
 	// Camera frames
 	{
 		this->_cameraFrames.reserve(static_cast<std::size_t>(Engine::NUM_FRAMES_IN_FLIGHT));
 		for (std::uint32_t i = 0; i < Engine::NUM_FRAMES_IN_FLIGHT; ++i) {
-			this->_cameraFrames.push_back(this->_pEngine->createPrimitives<MaterialType::Simple, PrimitiveType::Line>());
+			this->_cameraFrames.push_back(this->_pEngine->createPrimitives<MaterialType::Simple, PrimitiveType::Line>(MemoryPattern::Dynamic));
 		}
 	}
 
@@ -305,4 +322,34 @@ void Application::_initAssets(void) {
 			);
 		}
 	}
+}
+
+void Application::_updateCameraFrame(
+	Primitives<MaterialType::Simple, PrimitiveType::Line>& cameraFrame_,
+	const Camera& camera_
+) {
+	std::array<Vertex<MaterialType::Simple>, 5> vertices{ {
+		Vertex<MaterialType::Simple>{.position = {0.0f, 0.0f, 0.0f}, .color = {255, 255, 255, 255}},
+		Vertex<MaterialType::Simple>{.position = {-0.5f, -0.5f, 1.0f}, .color = {255, 255, 255, 255}},
+		Vertex<MaterialType::Simple>{.position = {-0.5f, static_cast<float>(camera_.height) - 0.5f, 1.0f}, .color = {255, 255, 255, 255}},
+		Vertex<MaterialType::Simple>{.position = {static_cast<float>(camera_.width) - 0.5f, static_cast<float>(camera_.height) - 0.5f, 1.0f}, .color = {255, 255, 255, 255}},
+		Vertex<MaterialType::Simple>{.position = {static_cast<float>(camera_.width) - 0.5f, -0.5f, 1.0f}, .color = {255, 255, 255, 255}},
+	} };
+	jjyou::glsl::mat3 invProjection = jjyou::glsl::inverse(camera_.getVisionProjection());
+	for (auto& v : vertices)
+		v.position = invProjection * v.position;
+	std::array<std::size_t, 16> indices = { {
+		0, 1,
+		0, 2,
+		0, 3,
+		0, 4,
+		1, 2,
+		2, 3,
+		3, 4,
+		4, 1
+	} };
+	std::array<Vertex<MaterialType::Simple>, 16> vertexBuffer{};
+	for (std::size_t i = 0; i < indices.size(); ++i)
+		vertexBuffer[i] = vertices[indices[i]];
+	cameraFrame_.setVertexData(vertexBuffer, false);
 }

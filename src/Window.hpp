@@ -5,6 +5,8 @@
 #include <jjyou/vis/CameraView.hpp>
 #include <chrono>
 #include <optional>
+#include <exception>
+#include <stdexcept>
 
 /***********************************************************************
  * @class	Window
@@ -145,7 +147,7 @@ public:
 			break;
 		}
 		default: {
-			return jjyou::glsl::mat4(1.0f);
+			throw std::logic_error("[Window] Unknown camera mode.");
 			break;
 		}
 		}

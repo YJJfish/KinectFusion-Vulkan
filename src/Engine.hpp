@@ -1,10 +1,13 @@
 #pragma once
 #include <vulkan/vulkan_raii.hpp>
 #include <jjyou/vk/Vulkan.hpp>
+#include <exception>
+#include <stdexcept>
 #include "Window.hpp"
 #include "Primitives.hpp"
 #include "Texture.hpp"
 #include "DescriptorSet.hpp"
+#include "Camera.hpp"
 
 /***********************************************************************
  * @class	Engine
@@ -56,8 +59,8 @@ public:
 	/** @brief	Create a `Primitives` instance.
 	  */
 	template <MaterialType _materialType, PrimitiveType _primitiveType>
-	Primitives<_materialType, _primitiveType> createPrimitives(void) {
-		return Primitives<_materialType, _primitiveType>(*this);
+	Primitives<_materialType, _primitiveType> createPrimitives(MemoryPattern memoryPattern_) {
+		return Primitives<_materialType, _primitiveType>(*this, memoryPattern_);
 	}
 
 	/** @brief	Create a `Surface` instance.
@@ -102,6 +105,39 @@ public:
 	  */
 	void waitIdle(void) const;
 
+	/** @brief	Set camera mode.
+	  * @param	cameraMode_		The new camera mode.
+	  * @param	viewMatrix_		The camera view matrix. IGNORED for scene camera. REQUIRED for fixed camera.
+	  * @param	camera_			Camera intrinsics parameters. IGNORED for scene camera. REQUIRED for fixed camera.
+	  * 
+	  * After setting the camera, the new camera's frame size may not be equal to that of the passed camera.
+	  * The camera's frame size will be scaled so that it fits in the current framebuffer.
+	  */
+	void setCameraMode(
+		Window::CameraMode cameraMode_,
+		std::optional<jjyou::glsl::mat4> viewMatrix_,
+		std::optional<Camera> camera_
+	);
+
+	/** @brief	Get the camera intrinsics parameters.
+	  */
+	const Camera& getCamera(void) const {
+		switch (this->_cameraMode) {
+		case Window::CameraMode::Scene: {
+			return this->_sceneCamera;
+			break;
+		}
+		case Window::CameraMode::Fixed: {
+			return this->_fixedCamera;
+			break;
+		}
+		default: {
+			throw std::logic_error("[Engine] Unknown camera mode.");
+			break;
+		}
+		}
+	}
+
 private:
 
 	bool _headlessMode = false;
@@ -113,6 +149,10 @@ private:
 	jjyou::vk::VmaAllocator _allocator{ nullptr };
 	
 	Window _window{ nullptr };
+
+	Window::CameraMode _cameraMode = Window::CameraMode::Scene;
+	Camera _sceneCamera{};
+	Camera _fixedCamera{};
 	
 	std::array<vk::raii::CommandPool, jjyou::vk::Context::NumQueueTypes> _commandPools{ { vk::raii::CommandPool{nullptr},vk::raii::CommandPool{nullptr},vk::raii::CommandPool{nullptr} } };
 	
