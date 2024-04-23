@@ -372,7 +372,7 @@ public:
 		jjyou::glsl::mat4 invProjection;
 		jjyou::glsl::mat4 view;
 		jjyou::glsl::vec3 viewPos;
-		float truncationWeight;
+		int truncationWeight;
 		float minDepth;
 		float maxDepth;
 		float invalidDepth;

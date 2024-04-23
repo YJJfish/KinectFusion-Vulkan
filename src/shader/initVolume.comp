@@ -19,25 +19,43 @@ layout(set = 0, binding = 0) buffer TSDFVolume {
 	float size;
 	vec3 corner;
 	float truncationDistance;
-	vec2 data[];
+	ivec2 data[];
 } tsdfVolume;
 
-void main(){
-	uint x = gl_GlobalInvocationID.x;
-	uint y = gl_GlobalInvocationID.y;
-	if (x >= tsdfVolume.resolution.x || y >= tsdfVolume.resolution.y)
+/** @brief	Helper function to pack float TSDF and integer weight into two shorts.
+  */
+void packVoxel(in float tsdf, in int weight, out int packedVoxel) {
+	packedVoxel = (int(tsdf * 32767.0) << 16) | weight;
+}
+
+/** @brief	Helper function to unpack two shorts to float TSDF and integer weight.
+  */
+void unpackVoxel(in int packedVoxel, out float tsdf, out int weight) {
+	tsdf = float(packedVoxel >> 16) * (1.0 / 32767.0);
+	weight = packedVoxel & 0x0000FFFF;
+}
+
+/** @brief	Helper function to pack 4 channel color into an int.
+  */
+void packColor(in vec4 color, out int packedColor) {
+	packedColor = int(packUnorm4x8(color));
+}
+
+/** @brief	Helper function to unpack an int to 4 channel color.
+  */
+void unpackColor(in int packedColor, out vec4 color) {
+	color = unpackUnorm4x8(uint(packedColor));
+}
+
+void main() {
+	if (gl_GlobalInvocationID.x >= tsdfVolume.resolution.x || gl_GlobalInvocationID.y >= tsdfVolume.resolution.y)
 		return;
-	for (uint z = 0; z < tsdfVolume.resolution.z; ++z)
-		tsdfVolume.data[(x *  tsdfVolume.resolution.y + y) * tsdfVolume.resolution.z + z] = vec2(0.0, 0.0);
-	//for (uint z = 0; z < tsdfVolume.resolution.z; ++z) {
-	//	vec3 coord = vec3(float(x), float(y), float(z)) * tsdfVolume.size + tsdfVolume.corner;
-	//	float distance = length(coord - vec3(0.3, 0.0, 0.0)) - 0.3;
-	//	vec2 storedValue;
-	//	if (distance < -tsdfVolume.truncationDistance)
-	//		storedValue = vec2(0.0, 0.0);
-	//	else
-	//		storedValue = vec2(distance / tsdfVolume.truncationDistance, 1.0);
-	//	tsdfVolume.data[(x *  tsdfVolume.resolution.y + y) * tsdfVolume.resolution.z + z] = storedValue;
-	//}
+	uint baseVoxelIndex = (gl_GlobalInvocationID.x * tsdfVolume.resolution.y + gl_GlobalInvocationID.y) * tsdfVolume.resolution.z;
+	for (uint z = 0; z < tsdfVolume.resolution.z; ++z) {
+		ivec2 data;
+		packVoxel(0.0, 0, data.x);
+		packColor(vec4(0.0, 0.0, 0.0, 1.0), data.y);
+		tsdfVolume.data[baseVoxelIndex + z] = data;
+	}
 	return;
 }

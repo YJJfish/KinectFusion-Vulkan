@@ -56,7 +56,7 @@ public:
 		vk::Extent2D depthFrameExtent_,
 
 		// Fusion parameters.
-		float truncationWeight_,
+		std::int16_t truncationWeight_,
 		float minDepth_,
 		float maxDepth_,
 		float invalidDepth_,
@@ -146,7 +146,7 @@ private:
 	const Engine* _pEngine = nullptr;
 	const vk::Extent2D _colorFrameExtent{};
 	const vk::Extent2D _depthFrameExtent{};
-	const float _truncationWeight;
+	const std::int16_t _truncationWeight;
 	const float _minDepth;
 	const float _maxDepth;
 	const float _invalidDepth;

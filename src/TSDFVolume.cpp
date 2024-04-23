@@ -22,7 +22,7 @@ TSDFVolume::TSDFVolume(
 	_size(size_),
 	_corner(corner_.has_value() ? (*corner_) : (-(resolution_ - 1U).cast<float>() * size_ / 2.0f)),
 	_truncationDistance(truncationDistance_.has_value() ? (*truncationDistance_) : (3.0f * size_)),
-	_bufferSize(sizeof(TSDFVolume::TSDFParams) + sizeof(jjyou::glsl::vec2) * this->_resolution.x * this->_resolution.y * this->_resolution.z)
+	_bufferSize(sizeof(TSDFVolume::TSDFParams) + sizeof(jjyou::glsl::ivec2) * this->_resolution.x * this->_resolution.y * this->_resolution.z)
 {
 	this->_createStorageBuffer();
 	this->_createDescriptorSet();

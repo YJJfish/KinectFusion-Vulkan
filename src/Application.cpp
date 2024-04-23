@@ -51,7 +51,7 @@ Application::Application(void) :
 		*this->_pEngine,
 		this->_pDataLoader->colorFrameExtent(),
 		this->_pDataLoader->depthFrameExtent(),
-		100.0f,
+		100,
 		this->_pDataLoader->minDepth(),
 		this->_pDataLoader->maxDepth(),
 		this->_pDataLoader->invalidDepth(),
@@ -83,6 +83,7 @@ void Application::mainLoop(void) {
 		struct {
 			bool rayCasting = true;
 			bool trackCamera = false;
+			bool displayInputFrames = false;
 		} visualization;
 	} ui;
 
@@ -127,6 +128,7 @@ void Application::mainLoop(void) {
 			if (ImGui::TreeNode("Visualization")) {
 				ImGui::Checkbox("Ray casting", &ui.visualization.rayCasting);
 				ImGui::Checkbox("Track camera", &ui.visualization.trackCamera);
+				ImGui::Checkbox("Display input frames", &ui.visualization.displayInputFrames);
 				ImGui::TreePop();
 			}
 			if (ImGui::TreeNode("Info")) {
@@ -161,7 +163,7 @@ void Application::mainLoop(void) {
 		}
 
 		// Track camera
-		if (ui.visualization.trackCamera) {
+		if (ui.visualization.trackCamera || ui.visualization.displayInputFrames) {
 			this->_pEngine->setCameraMode(
 				Window::CameraMode::Fixed,
 				*frameData.view,
@@ -177,7 +179,7 @@ void Application::mainLoop(void) {
 		}
 
 		// Ray casting for visualization
-		if (ui.visualization.rayCasting) {
+		if (ui.visualization.rayCasting && !ui.visualization.displayInputFrames) {
 			// Resize the ray casting map if its size does not match the window framebuffer
 			Camera rayCastingCamera = this->_pEngine->getCamera();
 			vk::Extent2D rayCastingExtent = vk::Extent2D(rayCastingCamera.width, rayCastingCamera.height);
@@ -199,6 +201,11 @@ void Application::mainLoop(void) {
 			this->_pEngine->drawSurface(this->_rayCastingMaps[resourceCycleCounter]);
 		}
 
+		// Display input frames
+		if (ui.visualization.displayInputFrames) {
+			this->_pEngine->drawSurface(this->_inputMaps[resourceCycleCounter]);
+		}
+
 		// Draw AR sphere
 		if (ui.ar.reset) {
 			ui.ar.reset = false;
@@ -208,7 +215,7 @@ void Application::mainLoop(void) {
 		if (ui.ar.drawARSphere) {
 			jjyou::glsl::mat4 model(1.0);
 			model[0][0] = model[1][1] = model[2][2] = ui.ar.scale;
-			model[3] = jjyou::glsl::vec4(ui.ar.position, 0.0f);
+			model[3] = jjyou::glsl::vec4(ui.ar.position, 1.0f);
 			this->_pEngine->drawPrimitives(this->_arSphere, model);
 		}
 
@@ -216,7 +223,7 @@ void Application::mainLoop(void) {
 		this->_pEngine->drawPrimitives(this->_axis, jjyou::glsl::mat4(1.0f));
 
 		// Draw camera space axis and camera space
-		if (!ui.visualization.trackCamera) {
+		if (!ui.visualization.trackCamera && !ui.visualization.displayInputFrames) {
 			this->_pEngine->drawPrimitives(this->_axis, jjyou::glsl::inverse(*frameData.view) * jjyou::glsl::mat4(jjyou::glsl::mat3(0.2f)));
 			this->_updateCameraFrame(this->_cameraFrames[resourceCycleCounter], frameData.camera);
 			this->_pEngine->drawPrimitives(this->_cameraFrames[resourceCycleCounter], jjyou::glsl::inverse(*frameData.view) * jjyou::glsl::mat4(jjyou::glsl::mat3(0.2f)));

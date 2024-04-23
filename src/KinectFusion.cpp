@@ -10,7 +10,7 @@ KinectFusion::KinectFusion(
 	const Engine & engine_,
 	vk::Extent2D colorFrameExtent_,
 	vk::Extent2D depthFrameExtent_,
-	float truncationWeight_,
+	std::int16_t truncationWeight_,
 	float minDepth_,
 	float maxDepth_,
 	float invalidDepth_,
@@ -113,7 +113,7 @@ void KinectFusion::fuse(
 	fusionDescriptorSet.fusionParameters().invProjection = jjyou::glsl::mat4(jjyou::glsl::inverse(projection_));
 	fusionDescriptorSet.fusionParameters().view = view_;
 	fusionDescriptorSet.fusionParameters().viewPos = jjyou::glsl::vec4(-jjyou::glsl::transpose(jjyou::glsl::mat3(view_)) * jjyou::glsl::vec3(view_[3]), 1.0f);
-	fusionDescriptorSet.fusionParameters().truncationWeight = this->_truncationWeight;
+	fusionDescriptorSet.fusionParameters().truncationWeight = static_cast<int>(this->_truncationWeight);
 	fusionDescriptorSet.fusionParameters().minDepth = this->_minDepth;
 	fusionDescriptorSet.fusionParameters().maxDepth = this->_maxDepth;
 	fusionDescriptorSet.fusionParameters().invalidDepth = this->_invalidDepth;
