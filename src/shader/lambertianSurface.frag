@@ -31,7 +31,7 @@ void main() {
 	vec4 inColor = texture(surfaceColorTexture, inTexCoord);
 	if (inColor.a <= 0.5)
 		discard;
-	vec3 inNormal = texture(surfaceNormalTexture, inTexCoord).rgb;
+	vec3 inNormal = texture(surfaceNormalTexture, inTexCoord).rgb * 2.0 - 1.0;
 	float inDepth = texture(surfaceDepthTexture, inTexCoord).r;
 	vec3 inPosition = getInPosition(inDepth);
 	// Assume a directional light along the camera's +z axis, intensity=0.99, ambient=0.01

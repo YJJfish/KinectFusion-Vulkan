@@ -124,12 +124,12 @@ Surface<_materialType>& Surface<_materialType>::createTextures(
 	constexpr std::array<vk::Format, 3> formats = { {
 		vk::Format::eR8G8B8A8Unorm,
 		vk::Format::eR32Sfloat,
-		vk::Format::eR32G32B32A32Sfloat
+		vk::Format::eR8G8B8A8Unorm
 	} };
 	constexpr std::array<vk::DeviceSize, 3> elementSizes = { {
 		4,
 		4,
-		16
+		4
 	} };
 	bool recreate = false;
 	for (std::uint32_t i = 0; i < Surface::numTextures; ++i) {

@@ -83,7 +83,7 @@ public:
 	  */
 	void initTSDFVolume(void) const;
 
-	/** @brief	Perform ray casting to get the color, depth, and normal map.
+	/** @brief	Perform ray casting to get the color, depth, and normal map for visualization.
 	  * @param	surface_		Surface made up of color, depth, and normal textures.
 	  *							The extents of the 3 textures should be the same.
 	  * @param	projection_		Camera projection matrix. Note that this matrix should use a
@@ -111,7 +111,6 @@ public:
 
 	/** @brief	Fuse a new frame (color + depth) into the TSDF volume.
 	  * @param	surface_		Surface made up of color and depth maps.
-	  *							In current version, color map is not used.
 	  * @param	projection_		Camera projection matrix. Note that this matrix should use a
 	  *							Computer Vision model (e.g. a pinhole camera). It is different
 	  *							from the Compute Graphics projection matrix.

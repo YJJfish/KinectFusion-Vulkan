@@ -35,14 +35,12 @@ layout(set = 1, binding = 0) uniform RayCastingParameters {
 /** @brief	Output surface textures.
   * 
   *			Three textures for color, depth, and normal respectively.
-  *			Currently, the color map is always constant. Extensions may be
-  *			made in the future to support color fusion.
   *			The depth map is true-depth. It is not in the clipped space of
   *			graphics rendering.
   */
 layout (set = 2, binding = 0, rgba8) uniform image2D surfaceColorTexture;
 layout (set = 2, binding = 1, r32f) uniform image2D surfaceDepthTexture;
-layout (set = 2, binding = 2, rgba32f) uniform image2D surfaceNormalTexture;
+layout (set = 2, binding = 2, rgba8) uniform image2D surfaceNormalTexture;
 
 /** @brief	Helper function to pack float TSDF and integer weight into two shorts.
   */
@@ -330,5 +328,5 @@ void main(){
 	// Store
 	imageStore(surfaceColorTexture, outputPixelPos, outColor);
 	imageStore(surfaceDepthTexture, outputPixelPos, vec4(outDepth));
-	imageStore(surfaceNormalTexture, outputPixelPos, vec4(outNormal, 1.0));
+	imageStore(surfaceNormalTexture, outputPixelPos, vec4(outNormal * 0.5 + 0.5, 1.0));
 }

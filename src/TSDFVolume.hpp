@@ -26,8 +26,8 @@ public:
 	 * 
 	 * In the compute shader, the TSDF volume storage buffer header is
 	 * made up of two parts: The header which includes the parameters;
-	 * And an array of vec2 which includes the data. This C++ structure
-	 * corresponds to the header.
+	 * And an array of ivec2 which includes the data (tsdf + weight + color). 
+	 * This C++ structure corresponds to the header.
 	 ***********************************************************************/
 	struct TSDFParams {
 		jjyou::glsl::uvec3 resolution;

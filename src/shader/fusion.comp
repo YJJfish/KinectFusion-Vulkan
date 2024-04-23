@@ -36,9 +36,6 @@ layout(set = 1, binding = 0) uniform FusionParameters {
 } fusionParameters;
 
 /** @brief	Input surface textures.
-  * 
-  *			Currently, the color map is not used. Extensions may be
-  *			made in the future to support color fusion.
   */
 layout (set = 2, binding = 0, rgba8) uniform image2D surfaceColorTexture;
 layout (set = 2, binding = 1, r32f) uniform image2D surfaceDepthTexture;
@@ -100,7 +97,9 @@ void main() {
 		packVoxel(newTSDF, newWeight, tsdfVolume.data[voxelIndex].x);
 		// Update color if within sqrt(3.0) * voxel size
 		if (-tsdfVolume.size * 1.732 <= sdf && sdf <= tsdfVolume.size * 1.732) {
-			vec4 pixelColor = imageLoad(surfaceColorTexture, nearestPixel);
+			// Usually color map's resolution is larger than that of depth map, so we will simply do nearest lookup.
+			ivec2 colorNearestPixel = ivec2(vec2(nearestPixel) / vec2(imageSize(surfaceDepthTexture)) * vec2(imageSize(surfaceColorTexture)));
+			vec4 pixelColor = imageLoad(surfaceColorTexture, colorNearestPixel);
 			vec4 oldColor;
 			unpackColor(tsdfVolume.data[voxelIndex].y, oldColor);
 			vec4 newColor = (oldColor * float(oldWeight) + pixelColor * 1.0) / float(oldWeight + 1);
