@@ -1,0 +1,51 @@
+/***********************************************************************
+ * @file	halfSampling.comp
+ * @author	jjyou
+ * @date	2024-4-24
+ * @brief	This file implements half-sampling algorithm for depth maps.
+***********************************************************************/
+
+#version 450
+
+layout (local_size_x = 32, local_size_y = 32) in;
+
+/** @brief	Input image.
+  * 
+  * The input depth image. This image should be the output of
+  *	`bilateralFiltering.comp` or `halfSampling.comp`.
+  */
+layout (set = 0, binding = 0, r32f) uniform readonly image2D inputImage;
+
+/** @brief	Output image. Its size should be half of the size of the input image.
+  */
+layout (set = 1, binding = 0, r32f) uniform image2D outputImage;
+
+/** @brief	Half-sampling parameters.
+  */
+layout(push_constant) uniform HalfSamplingParameters {
+	float sigmaColor;	//!< The sigma value controlling the color term in bilateral filtering.
+} halfSamplingParameters;
+
+void main() {
+	ivec2 outputPixelPos = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
+	ivec2 outputImageSize = imageSize(outputImage);
+	if (outputPixelPos.x >= outputImageSize.x || outputPixelPos.y >= outputImageSize.y)
+		return;
+	ivec2 centerPixelPos = outputPixelPos * 2;
+	float centerPixel = imageLoad(inputImage, centerPixelPos).r;
+	if (isinf(centerPixel)) {
+		return;
+	}
+	float sumValue = 0.0;
+	float sumWeight = 0.0;
+	for (int x = 0; x < 2; ++x)
+		for (int y = 0; y < 2; ++y) {
+			ivec2 inputPixelPos = centerPixelPos + ivec2(x, y);
+			float inputPixel = imageLoad(inputImage, inputPixelPos).r;
+			if (abs(inputPixel - centerPixel) <= 3.0 * halfSamplingParameters.sigmaColor) {
+				sumValue += inputPixel;
+				sumWeight += 1.0;
+			}
+		}
+	imageStore(outputImage, outputPixelPos, vec4(sumValue / sumWeight));
+}

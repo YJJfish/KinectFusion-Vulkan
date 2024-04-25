@@ -1,0 +1,39 @@
+/***********************************************************************
+ * @file	computeNormalMap.comp
+ * @author	jjyou
+ * @date	2024-4-24
+ * @brief	This file implements the function to generate a normal map
+ *			from the vertex map.
+***********************************************************************/
+
+#version 450
+
+layout (local_size_x = 32, local_size_y = 32) in;
+
+/** @brief	Input vertex map.
+  */
+layout (set = 0, binding = 1, rgba32f) uniform readonly image2D inputVertexMap;
+
+/** @brief	Output normal map.
+  *
+  *			The size of normal map should be the same as that of vertex map.
+  */
+layout (set = 0, binding = 2, rgba32f) uniform image2D outputNormalMap;
+
+void main() {
+	ivec2 inputSize = imageSize(inputVertexMap);
+	ivec2 pixelPos = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
+	if (pixelPos.x >= inputSize.x || pixelPos.y >= inputSize.y)
+		return;
+	vec4 left = imageLoad(inputVertexMap, ivec2(max(pixelPos.x - 1, 0), pixelPos.y));
+	vec4 right = imageLoad(inputVertexMap, ivec2(min(pixelPos.x + 1, inputSize.x - 1), pixelPos.y));
+	vec4 up = imageLoad(inputVertexMap, ivec2(pixelPos.x, max(pixelPos.y - 1, 0)));
+	vec4 down = imageLoad(inputVertexMap, ivec2(pixelPos.x, min(pixelPos.y + 1, inputSize.y - 1)));
+	if (left.w == 0.0 || right.w == 0.0 || up.w == 0.0 || down.w == 0.0) {
+		imageStore(outputNormalMap, pixelPos, vec4(0.0));
+	}
+	else {
+		vec3 normal = normalize(cross(down.xyz - up.xyz, right.xyz - left.xyz));
+		imageStore(outputNormalMap, pixelPos, vec4(normal, 1.0));
+	}
+}

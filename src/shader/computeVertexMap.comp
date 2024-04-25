@@ -1,0 +1,47 @@
+/***********************************************************************
+ * @file	computeVertexMap.comp
+ * @author	jjyou
+ * @date	2024-4-24
+ * @brief	This file implements the function to generate a vertex map
+ *			given camera intrinsics and a depth map.
+***********************************************************************/
+
+#version 450
+
+layout (local_size_x = 32, local_size_y = 32) in;
+
+/** @brief	Input depth image.
+  */
+layout (set = 0, binding = 0, r32f) uniform readonly image2D inputDepthImage;
+
+/** @brief	Output vertex map.
+  *
+  *			The size of vertex map should be the same as that of depth image.
+  */
+layout (set = 0, binding = 1, rgba32f) uniform image2D outputVertexMap;
+
+/** @brief	Camera intrinsics.
+  */
+layout(push_constant) uniform CameraIntrinsics {
+	float fx, fy, cx, cy;
+} cameraIntrinsics;
+
+void main() {
+	ivec2 inputSize = imageSize(inputDepthImage);
+	ivec2 pixelPos = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
+	if (pixelPos.x >= inputSize.x || pixelPos.y >= inputSize.y)
+		return;
+	float depth = imageLoad(inputDepthImage, pixelPos).r;
+	if (isinf(depth)) {
+		imageStore(outputVertexMap, pixelPos, vec4(0.0));
+	}
+	else {
+		vec3 point = vec3(
+			(float(pixelPos.x) - cameraIntrinsics.cx) / cameraIntrinsics.fx,
+			(float(pixelPos.y) - cameraIntrinsics.cy) / cameraIntrinsics.fy,
+			1.0
+		);
+		point *= depth;
+		imageStore(outputVertexMap, pixelPos, vec4(point, 1.0));
+	}
+}
