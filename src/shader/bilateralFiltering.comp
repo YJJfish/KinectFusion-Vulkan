@@ -11,29 +11,42 @@ layout (local_size_x = 32, local_size_y = 32) in;
 
 /** @brief	Input image.
   * 
-  * The input depth image which uses 0 or NaN to indicate an invalid depth value.
+  * The input depth image. We set binding=1 because this depth image
+  *	should be part of a simple/lambertian surface.
   */
-layout (set = 0, binding = 0, r32f) uniform readonly image2D inputImage;
+layout (set = 0, binding = 1, r32f) uniform readonly image2D inputImage;
 
 /** @brief	Output image.
   * 
-  * The output depth image which uses 0 to indicate an invalid depth value.
+  * The output depth image which uses +inf to indicate an invalid depth value.
   * It should have the same size as the input image.
   */
-layout (set = 0, binding = 1, r32f) uniform image2D outputImage;
+layout (set = 1, binding = 0, r32f) uniform image2D outputImage;
 
 /** @brief	Bilateral filter parameters.
   */
-layout(push_constant) uniform BilateralFilterParam {
+layout(push_constant) uniform BilateralFilteringParameters {
 	float sigmaColor;	//!< The sigma value controlling the color term.
 	float sigmaSpace;	//!< The sigma value controlling the space term.
 	int d;				//!< The diameter of the filter area. It should be an odd number.
-} bilateralFilterParam;
+	float minDepth;
+	float maxDepth;
+	float invalidDepth;
+} bilateralFilteringParameters;
 
-/** @brief	Helper function to compute `x*x`.
+/** @brief	Helper function to compute `x * x`.
   */
 float square(float x) {
 	return x * x;
+}
+
+/** @brief	Helper function to check the validity of a depth value
+  */
+bool validDepth(float x) {
+	return  \
+		(x != bilateralFilteringParameters.invalidDepth) &&
+		(x >= bilateralFilteringParameters.minDepth) &&
+		(x <= bilateralFilteringParameters.maxDepth);
 }
 
 void main() {
@@ -42,13 +55,13 @@ void main() {
 	if (centerPixelPos.x >= iSize.x || centerPixelPos.y >= iSize.y)
 		return;
 	float centerPixel = imageLoad(inputImage, centerPixelPos).r;
-	if (isnan(centerPixel) || centerPixel == 0.0) {
-		imageStore(outputImage, centerPixelPos, vec4(0.0));
+	if (!validDepth(centerPixel)) {
+		imageStore(outputImage, centerPixelPos, vec4(1.0 / 0.0));
 		return;
 	}
-	float coeffColor = -0.5 / square(bilateralFilterParam.sigmaColor);
-	float coeffSpace = -0.5 / square(bilateralFilterParam.sigmaSpace);
-	int r = bilateralFilterParam.d / 2;
+	float coeffColor = -0.5 / square(bilateralFilteringParameters.sigmaColor);
+	float coeffSpace = -0.5 / square(bilateralFilteringParameters.sigmaSpace);
+	int r = bilateralFilteringParameters.d / 2;
 	ivec2 xRange = ivec2(max(0, centerPixelPos.x - r), min(iSize.x - 1, centerPixelPos.x + r));
 	ivec2 yRange = ivec2(max(0, centerPixelPos.y - r), min(iSize.y - 1, centerPixelPos.y + r));
 	float sumValue = 0.0;
@@ -57,7 +70,7 @@ void main() {
 		for (int y = yRange[0]; y <= yRange[1]; ++y) {
 			ivec2 inputPixelPos = ivec2(x, y);
 			float inputPixel = imageLoad(inputImage, inputPixelPos).r;
-			if (isnan(inputPixel) || inputPixel == 0.0)
+			if (!validDepth(inputPixel))
 				continue;
 			float weightColor = exp(coeffColor * square(centerPixel - inputPixel));
 			float weightSpace = exp(coeffSpace * square(length(centerPixelPos - inputPixelPos)));

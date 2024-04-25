@@ -50,7 +50,7 @@ void KinectFusion::initTSDFVolume(void) const {
 
 void KinectFusion::rayCasting(
 	const Surface<Lambertian>& surface_,
-	const jjyou::glsl::mat3& projection_,
+	const Camera& camera_,
 	const jjyou::glsl::mat4& view_,
 	float minDepth_,
 	float maxDepth_,
@@ -68,7 +68,11 @@ void KinectFusion::rayCasting(
 	);
 	commandBuffer.bindPipeline(vk::PipelineBindPoint::eCompute, *this->_rayCastingPipeline);
 	this->_tsdfVolume.bind(commandBuffer, vk::PipelineBindPoint::eCompute, this->_rayCastingPipelineLayout, 0);
-	rayCastingDescriptorSet.rayCastingParameters().invProjection = jjyou::glsl::mat4(jjyou::glsl::inverse(projection_));
+	jjyou::glsl::mat3 projection = camera_.getVisionProjection();
+	rayCastingDescriptorSet.rayCastingParameters().fx = projection[0][0];
+	rayCastingDescriptorSet.rayCastingParameters().fy = projection[1][1];
+	rayCastingDescriptorSet.rayCastingParameters().cx = projection[2][0];
+	rayCastingDescriptorSet.rayCastingParameters().cy = projection[2][1];
 	rayCastingDescriptorSet.rayCastingParameters().invView = jjyou::glsl::inverse(view_);
 	rayCastingDescriptorSet.rayCastingParameters().minDepth = minDepth_;
 	rayCastingDescriptorSet.rayCastingParameters().maxDepth = maxDepth_;
@@ -93,9 +97,24 @@ void KinectFusion::rayCasting(
 	commandBuffer.reset(vk::CommandBufferResetFlags(0));
 }
 
+std::optional<jjyou::glsl::mat4> KinectFusion::estimatePose(
+	const Surface<Simple>& surface_,
+	const Camera& camera_,
+	const jjyou::glsl::mat4& initialView_,
+	float sigmaColor_,
+	float sigmaSpace_,
+	int filterKernelSize_,
+	float distanceThreshold_,
+	float angleThreshold_
+) const {
+	// 1. Apply bilateral filtering to the input depth map. Build pyramid. Generate vertex maps and normals.
+	
+	// 2. Perform ray casting to generate vertex maps and normals.
+}
+
 void KinectFusion::fuse(
 	const Surface<Simple>& surface_,
-	const jjyou::glsl::mat3& projection_,
+	const Camera& camera_,
 	const jjyou::glsl::mat4& view_
 ) const {
 	const FusionDescriptorSet& fusionDescriptorSet = this->_fusionAlgorithmData.descriptorSet;
@@ -109,8 +128,11 @@ void KinectFusion::fuse(
 	);
 	commandBuffer.bindPipeline(vk::PipelineBindPoint::eCompute, *this->_fusionPipeline);
 	this->_tsdfVolume.bind(commandBuffer, vk::PipelineBindPoint::eCompute, this->_fusionPipelineLayout, 0);
-	fusionDescriptorSet.fusionParameters().projection = projection_;
-	fusionDescriptorSet.fusionParameters().invProjection = jjyou::glsl::mat4(jjyou::glsl::inverse(projection_));
+	jjyou::glsl::mat3 projection = camera_.getVisionProjection();
+	fusionDescriptorSet.fusionParameters().fx = projection[0][0];
+	fusionDescriptorSet.fusionParameters().fy = projection[1][1];
+	fusionDescriptorSet.fusionParameters().cx = projection[2][0];
+	fusionDescriptorSet.fusionParameters().cy = projection[2][1];
 	fusionDescriptorSet.fusionParameters().view = view_;
 	fusionDescriptorSet.fusionParameters().viewPos = jjyou::glsl::vec4(-jjyou::glsl::transpose(jjyou::glsl::mat3(view_)) * jjyou::glsl::vec3(view_[3]), 1.0f);
 	fusionDescriptorSet.fusionParameters().truncationWeight = static_cast<int>(this->_truncationWeight);

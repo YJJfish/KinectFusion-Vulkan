@@ -253,7 +253,7 @@ public:
 	 * @brief	Binding 0 uniform buffer in the ray casting shaders.
 	 ***********************************************************************/
 	struct RayCastingParameters {
-		jjyou::glsl::mat4 invProjection;
+		float fx, fy, cx, cy;
 		jjyou::glsl::mat4 invView;
 		float minDepth;
 		float maxDepth;
@@ -368,8 +368,7 @@ public:
 	 * @brief	Binding 0 uniform buffer in the fusion shaders.
 	 ***********************************************************************/
 	struct FusionParameters {
-		jjyou::glsl::mat4 projection;
-		jjyou::glsl::mat4 invProjection;
+		float fx, fy, cx, cy;
 		jjyou::glsl::mat4 view;
 		jjyou::glsl::vec3 viewPos;
 		int truncationWeight;

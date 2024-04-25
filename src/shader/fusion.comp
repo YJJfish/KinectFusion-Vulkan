@@ -25,8 +25,7 @@ layout(set = 0, binding = 0) buffer TSDFVolume {
 /** @brief	Fusion parameters.
   */
 layout(set = 1, binding = 0) uniform FusionParameters {
-	mat4 projection;
-	mat4 invProjection;
+	float fx, fy, cx, cy;
 	mat4 view;
 	vec3 viewPos;
 	int truncationWeight;
@@ -70,8 +69,12 @@ void main() {
 		return;
 	ivec2 depthFrameSize = imageSize(surfaceDepthTexture);
 	uint baseVoxelIndex = (gl_GlobalInvocationID.x * tsdfVolume.resolution.y + gl_GlobalInvocationID.y) * tsdfVolume.resolution.z;
-	vec3 baseProjection = mat3(fusionParameters.projection) * (mat3(fusionParameters.view) * (vec3(gl_GlobalInvocationID.xy, 0.0) * tsdfVolume.size + tsdfVolume.corner) + fusionParameters.view[3].xyz);
-	vec3 deltaProjection = mat3(fusionParameters.projection) * mat3(fusionParameters.view) * vec3(0.0, 0.0, 1.0) * tsdfVolume.size;
+	vec3 baseProjection = mat3(fusionParameters.view) * (vec3(gl_GlobalInvocationID.xy, 0.0) * tsdfVolume.size + tsdfVolume.corner) + fusionParameters.view[3].xyz;
+	baseProjection.x = fusionParameters.fx * baseProjection.x + fusionParameters.cx * baseProjection.z;
+	baseProjection.y = fusionParameters.fy * baseProjection.y + fusionParameters.cy * baseProjection.z;
+	vec3 deltaProjection = mat3(fusionParameters.view) * vec3(0.0, 0.0, 1.0) * tsdfVolume.size;
+	deltaProjection.x = fusionParameters.fx * deltaProjection.x + fusionParameters.cx * deltaProjection.z;
+	deltaProjection.y = fusionParameters.fy * deltaProjection.y + fusionParameters.cy * deltaProjection.z;
 	for (uint z = 0; z < tsdfVolume.resolution.z; ++z) {
 		// Compute the voxel index
 		uint voxelIndex = baseVoxelIndex + z;

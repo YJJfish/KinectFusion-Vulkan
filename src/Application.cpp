@@ -151,7 +151,7 @@ void Application::mainLoop(void) {
 			// Fuse the new frame
 			this->_pKinectFusion->fuse(
 				this->_inputMaps[resourceCycleCounter],
-				frameData.camera.getVisionProjection(),
+				frameData.camera,
 				*frameData.view
 			);
 		}
@@ -192,10 +192,10 @@ void Application::mainLoop(void) {
 			// Ray casting
 			this->_pKinectFusion->rayCasting(
 				this->_rayCastingMaps[resourceCycleCounter],
-				rayCastingCamera.getVisionProjection(),
+				rayCastingCamera,
 				this->_pEngine->window().getViewMatrix(),
-				0.01f, 100.0f,
-				100000.0f,
+				rayCastingCamera.zNear, rayCastingCamera.zFar,
+				std::numeric_limits<float>::infinity(),
 				std::nullopt
 			);
 			this->_pEngine->drawSurface(this->_rayCastingMaps[resourceCycleCounter]);

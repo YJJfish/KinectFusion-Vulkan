@@ -1,6 +1,7 @@
 #pragma once
 #include "TSDFVolume.hpp"
 #include "Engine.hpp"
+#include "Camera.hpp"
 
 /***********************************************************************
  * @class	KinectFusion
@@ -86,9 +87,7 @@ public:
 	/** @brief	Perform ray casting to get the color, depth, and normal map for visualization.
 	  * @param	surface_		Surface made up of color, depth, and normal textures.
 	  *							The extents of the 3 textures should be the same.
-	  * @param	projection_		Camera projection matrix. Note that this matrix should use a
-	  *							Computer Vision model (e.g. a pinhole camera). It is different
-	  *							from the Compute Graphics projection matrix.
+	  * @param	camera_			Camera instance for computing the projection matrix.
 	  * @param	view_			Camera view matrix that transforms from world space to camera space.
 	  * @param	minDepth_		Visible depth lower bound. Voxels outside of this range will not be considered.
 	  * @param	maxDepth_		Visible depth upper bound. Voxels outside of this range will not be considered.
@@ -101,24 +100,45 @@ public:
 	  */
 	void rayCasting(
 		const Surface<Lambertian>& surface_,
-		const jjyou::glsl::mat3& projection_,
+		const Camera& camera_,
 		const jjyou::glsl::mat4& view_,
 		float minDepth_,
 		float maxDepth_,
 		float invalidDepth_,
 		std::optional<float> marchingStep_ = std::nullopt
-		) const;
+	) const;
+
+	/** @brief	Estimate the view matrix of a new frame using frame-to-model tracking.
+	  * @param	surface_			Surface made up of color and depth maps. The color map is not used in this step.
+	  * @param	camera_				Camera instance for computing projection matrices. The matrices will be different for different levels.
+	  * @param	initialView_		The initial view matrix (from world space to camera space).
+	  *								This is usually set as the view matrix of the last frame.
+	  * @param	sigmaColor_			Bilateral filtering parameter.
+	  * @param	sigmaSpace_			Bilateral filtering parameter.
+	  * @param	filterKernelSize_	Bilateral filtering kernel size. Must be an odd number.
+	  * @param	distanceThreshold_	Distance threshold used in projective correspondence search.
+	  * @param	angleThreshold_		Angle threshold used in projective correspondence search.
+	  * @return	The esimated view matrix for the frame. If the ICP failed, std::nullopt will be returned.
+	  */
+	std::optional<jjyou::glsl::mat4> estimatePose(
+		const Surface<Simple>& surface_,
+		const Camera& camera_,
+		const jjyou::glsl::mat4& initialView_,
+		float sigmaColor_,
+		float sigmaSpace_,
+		int filterKernelSize_,
+		float distanceThreshold_,
+		float angleThreshold_
+	) const;
 
 	/** @brief	Fuse a new frame (color + depth) into the TSDF volume.
 	  * @param	surface_		Surface made up of color and depth maps.
-	  * @param	projection_		Camera projection matrix. Note that this matrix should use a
-	  *							Computer Vision model (e.g. a pinhole camera). It is different
-	  *							from the Compute Graphics projection matrix.
+	  * @param	camera_			Camera instance for computing the projection matrix.
 	  * @param	view_			Camera view matrix that transforms points from world space to camera space.
 	  */
 	void fuse(
 		const Surface<Simple>& surface_,
-		const jjyou::glsl::mat3& projection_,
+		const Camera& camera_,
 		const jjyou::glsl::mat4& view_
 	) const;
 
