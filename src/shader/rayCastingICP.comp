@@ -1,8 +1,8 @@
 /***********************************************************************
- * @file	rayCasting.comp
+ * @file	rayCastingICP.comp
  * @author	jjyou
- * @date	2024-4-10
- * @brief	This file implements ray casting algorithm.
+ * @date	2024-4-25
+ * @brief	This file implements ray casting algorithm for ICP.
 ***********************************************************************/
 
 #version 450
@@ -24,7 +24,7 @@ layout(set = 0, binding = 0) readonly buffer TSDFVolume {
 /** @brief	Ray casting parameters.
   */
 layout(set = 1, binding = 0) uniform RayCastingParameters {
-	mat4 invProjection;
+	float fx, fy, cx, cy;
 	mat4 invView;
 	float minDepth;
 	float maxDepth;
@@ -32,15 +32,15 @@ layout(set = 1, binding = 0) uniform RayCastingParameters {
 	float marchingStep;
 } rayCastingParameters;
 
-/** @brief	Output surface textures.
+/** @brief	Output pyramid textures.
   * 
-  *			Three textures for color, depth, and normal respectively.
-  *			The depth map is true-depth. It is not in the clipped space of
-  *			graphics rendering.
+  *			Different from ray casting for visualization,
+  *			ray casting for ICP produces a depth image, a vertex map,
+  *			and a normal map.
   */
-layout (set = 2, binding = 0, rgba8) uniform image2D surfaceColorTexture;
-layout (set = 2, binding = 1, r32f) uniform image2D surfaceDepthTexture;
-layout (set = 2, binding = 2, rgba8) uniform image2D surfaceNormalTexture;
+layout (set = 2, binding = 0, r32f) uniform image2D outputDepthImage;
+layout (set = 2, binding = 1, rgba32f) uniform image2D outputVertexMap;
+layout (set = 2, binding = 2, rgba32f) uniform image2D outputNormalMap;
 
 /** @brief	Helper function to pack float TSDF and integer weight into two shorts.
   */
@@ -236,7 +236,7 @@ vec3 computeNormal(vec3 pos) {
   */
 bool rayCasting(
 	in vec3 rayOrigin, in vec3 rayDir, in float scaleFactor,
-	out vec4 outColor, out float outDepth, out vec3 outNormal
+	out float outDepth, out vec3 outVertex, out vec3 outNormal
 ) {
 	// Compute t range
 	rayDir.x = (rayDir.x == 0.0) ? 1e-5 : rayDir.x;
@@ -278,8 +278,8 @@ bool rayCasting(
 				// Find zero-surface.
 				float t = lastT + (currT - lastT) * lastTSDF / (lastTSDF - currTSDF);
 				vec3 pos = rayOrigin + t * rayDir;
-				outColor = interpolateColor(pos);
 				outDepth = t / scaleFactor;
+				outVertex = pos;
 				outNormal = computeNormal(pos);
 				return true;
 			}
@@ -292,8 +292,8 @@ bool rayCasting(
 			// Find zero-surface.
 			float t = currT;
 			vec3 pos = rayOrigin + t * rayDir;
-			outColor = interpolateColor(pos);
 			outDepth = t / scaleFactor;
+			outVertex = pos;
 			outNormal = computeNormal(pos);
 			return true;
 		}
@@ -304,29 +304,34 @@ bool rayCasting(
 void main(){
 
 	ivec2 outputPixelPos = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
-	ivec2 outputSize = imageSize(surfaceColorTexture);
+	ivec2 outputSize = imageSize(outputDepthImage);
 	if (outputPixelPos.x >= outputSize.x || outputPixelPos.y >= outputSize.y)
 		return;
 
 	// Compute ray direction and origin in the world space
 	vec3 rayOrigin = rayCastingParameters.invView[3].xyz;
-	vec3 rayDir = vec3(float(outputPixelPos.x), float(outputPixelPos.y), 1.0);
-	rayDir = mat3(rayCastingParameters.invProjection) * rayDir;
+	vec3 rayDir = vec3(
+		(float(outputPixelPos.x) - rayCastingParameters.cx) / rayCastingParameters.fx,
+		(float(outputPixelPos.y) - rayCastingParameters.cy) / rayCastingParameters.fy,
+		1.0
+	);
 	float scaleFactor = length(rayDir);
 	rayDir = normalize(mat3(rayCastingParameters.invView) * rayDir);
 
 	// Ray casting
-	vec4 outColor;
 	float outDepth;
+	vec3 outVertex;
 	vec3 outNormal;
-	if (!rayCasting(rayOrigin, rayDir, scaleFactor, outColor, outDepth, outNormal)) {
-		outColor = vec4(0.0, 0.0, 0.0, 0.0);
-		outDepth = rayCastingParameters.invalidDepth;
+	float mask = 1.0;
+	if (!rayCasting(rayOrigin, rayDir, scaleFactor, outDepth, outVertex, outNormal)) {
+		outDepth = 1.0 / 0.0;
+		outVertex = vec3(0.0, 0.0, 0.0);
 		outNormal = vec3(0.0, 0.0, 0.0);
+		mask = 0.0;
 	}
 
 	// Store
-	imageStore(surfaceColorTexture, outputPixelPos, outColor);
-	imageStore(surfaceDepthTexture, outputPixelPos, vec4(outDepth));
-	imageStore(surfaceNormalTexture, outputPixelPos, vec4(outNormal * 0.5 + 0.5, 1.0));
+	imageStore(outputDepthImage, outputPixelPos, vec4(outDepth));
+	imageStore(outputVertexMap, outputPixelPos, vec4(outVertex, mask));
+	imageStore(outputNormalMap, outputPixelPos, vec4(outNormal, mask));
 }

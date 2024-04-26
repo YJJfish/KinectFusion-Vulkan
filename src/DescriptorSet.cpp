@@ -238,3 +238,12 @@ FusionDescriptorSet::FusionDescriptorSet(
 		this->_pEngine->context().device().updateDescriptorSets(writeDescriptorSet, nullptr);
 	}
 }
+
+ICPDescriptorSet::ICPDescriptorSet(
+	const Engine& engine_,
+	const KinectFusion& kinectFusion_
+) :
+	_pEngine(&engine_), _pKinectFusion(&kinectFusion_), _descriptorSetLayout(*kinectFusion_.fusionDescriptorSetLayout())
+{
+
+}

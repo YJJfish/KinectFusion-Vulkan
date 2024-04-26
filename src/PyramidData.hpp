@@ -93,7 +93,7 @@ public:
 
 	/** @brief	Create the descriptor set layout of 3 storage image descriptors.
 	  */
-	static vk::raii::DescriptorSetLayout createSamplerDescriptorSetLayout(const vk::raii::Device& device_) {
+	static vk::raii::DescriptorSetLayout createDescriptorSetLayout(const vk::raii::Device& device_) {
 		std::array<vk::DescriptorSetLayoutBinding, PyramidData::numTextures> descriptorSetLayoutBindings;
 		for (std::uint32_t i = 0; i < PyramidData::numTextures; ++i) {
 			descriptorSetLayoutBindings[i]

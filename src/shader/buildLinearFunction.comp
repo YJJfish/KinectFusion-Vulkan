@@ -1,0 +1,150 @@
+/***********************************************************************
+ * @file	buildLinearFunction.comp
+ * @author	jjyou
+ * @date	2024-4-25
+ * @brief	This file implements the shader function to compute A and b
+ *			in point-to-plane ICP algorithm.
+***********************************************************************/
+
+#version 450
+
+layout (local_size_x = 32, local_size_y = 32) in;
+
+/** @brief	Frame pyramid data (ICP algorithm's source), in frame's local space.
+  */
+layout (set = 0, binding = 1, rgba32f) uniform readonly image2D frameVertexMap;
+layout (set = 0, binding = 2, rgba32f) uniform readonly image2D frameNormalMap;
+
+/** @brief	Model pyramid data (ICP algorithm's destination), in world space.
+  */
+layout (set = 1, binding = 1, rgba32f) uniform readonly image2D modelVertexMap;
+layout (set = 1, binding = 2, rgba32f) uniform readonly image2D modelNormalMap;
+
+/** @brief	ICP parameters.
+  */
+layout(set = 2, binding = 0) uniform ICPParameters {
+	mat4 frameInvView;			//!< The inverse of the current view matrix of the frame data.
+	mat4 modelView;				//!< The current view matrix of the model data.
+	float fx, fy, cx, cy;		//!< The camera projection parameters of the model data.
+	float distanceThreshold;	//!< Distance threshold used in projective correspondence search.
+	float angleThreshold;		//!< Angle threshold used in projective correspondence search.
+} icpParameters;
+
+/** @brief	Storage buffer to store the 6x6 matrix A and 6d vector b.
+  *
+  *			A is a symmetric matrix, so we only need to store 21 elements.
+  *			The total number of floats for each work group is 21+6=27.
+  *			The first dimension of data should be equal to the number of
+  *			work groups (aka blocks in CUDA).
+  *			Within each work group we will perform a sum reduction for all
+  *			32x32 invocations (aka threads in CUDA).
+  */
+layout(set = 2, binding = 1) buffer GlobalSumBuffer {
+	uint size;			//<! The length of the first dimension of data. Not used in this shader.
+	float data[][27];
+} globalSumBuffer;
+
+/** @brief	A buffer used to sum up values for all invocations within
+  *			the current work group.
+  */
+const uint numLocalInvocations = gl_WorkGroupSize.x * gl_WorkGroupSize.y;
+shared float sumBuffer[numLocalInvocations];
+
+void main() {
+	ivec2 pixelPos = ivec2(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y);
+	ivec2 frameSize = imageSize(frameVertexMap);
+	vec4 frameVertex = imageLoad(frameVertexMap, pixelPos);
+	vec4 frameNormal = imageLoad(frameNormalMap, pixelPos);
+	vec4 modelVertex;
+	vec4 modelNormal;
+	bool findCorrespondence = false;
+	if (frameVertex.w != 0.0 && frameNormal.w != 0.0) {
+		frameVertex.xyz = vec3(icpParameters.frameInvView * vec4(frameVertex.xyz, 1.0));
+		frameNormal.xyz = mat3(icpParameters.frameInvView) * frameNormal.xyz;
+		vec3 frameVertexInModelView = vec3(icpParameters.modelView * vec4(frameVertex.xyz, 1.0));
+		ivec2 nearestPixel = ivec2(
+			int(round(icpParameters.fx * frameVertexInModelView.x / frameVertexInModelView.z + icpParameters.cx)),
+			int(round(icpParameters.fy * frameVertexInModelView.y / frameVertexInModelView.z + icpParameters.cy))
+		);
+		if (nearestPixel.x >= 0 && nearestPixel.x < frameSize.x &&
+			nearestPixel.y >= 0 && nearestPixel.y < frameSize.y &&
+			frameVertexInModelView.z > 0)
+		{
+			modelVertex = imageLoad(modelVertexMap, nearestPixel);
+			modelNormal = imageLoad(modelNormalMap, nearestPixel);
+			if (modelVertex.w != 0.0 && modelNormal.w != 0.0 &&
+				length(frameVertex.xyz - modelVertex.xyz) <= icpParameters.distanceThreshold && 
+				dot(frameNormal.xyz, modelNormal.xyz) >= icpParameters.angleThreshold)
+			{
+				findCorrespondence = true;
+			}
+		}
+	}
+	float row[7];
+	if (findCorrespondence) {
+		vec3 tmp;
+		tmp = cross(frameVertex.xyz, modelNormal.xyz);
+		row[0] = tmp.x;
+		row[1] = tmp.y;
+		row[2] = tmp.z;
+		row[3] = modelNormal.x;
+		row[4] = modelNormal.y;
+		row[5] = modelNormal.z;
+		row[6] = dot(modelNormal.xyz, modelVertex.xyz - frameVertex.xyz);
+	} else {
+		row[0] = row[1] = row[2] = row[3] = row[4] = row[5] = row[6] = 0.0;
+	}
+	uint globalWorkGroupID = gl_WorkGroupID.y * gl_NumWorkGroups.x + gl_WorkGroupID.x;
+	int counter = 0;
+	for (int i = 0; i < 6; ++i)
+		for (int j = i; j < 7; ++j) {
+			barrier();
+			sumBuffer[gl_LocalInvocationIndex] = row[i] * row[j];
+			barrier();
+			// Suppose the number of invocations within one work group won't exceed 1024.
+			// We can manually unroll a loop here.
+			if (numLocalInvocations >= 1024) {
+				if (gl_LocalInvocationIndex < 512) sumBuffer[gl_LocalInvocationIndex] += sumBuffer[gl_LocalInvocationIndex + 512];
+				barrier();
+			}
+			if (numLocalInvocations >= 512) {
+				if (gl_LocalInvocationIndex < 256) sumBuffer[gl_LocalInvocationIndex] += sumBuffer[gl_LocalInvocationIndex + 256];
+				barrier();
+			}
+			if (numLocalInvocations >= 256) {
+				if (gl_LocalInvocationIndex < 128) sumBuffer[gl_LocalInvocationIndex] += sumBuffer[gl_LocalInvocationIndex + 128];
+				barrier();
+			}
+			if (numLocalInvocations >= 128) {
+				if (gl_LocalInvocationIndex < 64) sumBuffer[gl_LocalInvocationIndex] += sumBuffer[gl_LocalInvocationIndex + 64];
+				barrier();
+			}
+			if (numLocalInvocations >= 64) {
+				if (gl_LocalInvocationIndex < 32) sumBuffer[gl_LocalInvocationIndex] += sumBuffer[gl_LocalInvocationIndex + 32];
+				barrier();
+			}
+			if (numLocalInvocations >= 32) {
+				if (gl_LocalInvocationIndex < 16) sumBuffer[gl_LocalInvocationIndex] += sumBuffer[gl_LocalInvocationIndex + 16];
+				barrier();
+			}
+			if (numLocalInvocations >= 16) {
+				if (gl_LocalInvocationIndex < 8) sumBuffer[gl_LocalInvocationIndex] += sumBuffer[gl_LocalInvocationIndex + 8];
+				barrier();
+			}
+			if (numLocalInvocations >= 8) {
+				if (gl_LocalInvocationIndex < 4) sumBuffer[gl_LocalInvocationIndex] += sumBuffer[gl_LocalInvocationIndex + 4];
+				barrier();
+			}
+			if (numLocalInvocations >= 4) {
+				if (gl_LocalInvocationIndex < 2) sumBuffer[gl_LocalInvocationIndex] += sumBuffer[gl_LocalInvocationIndex + 2];
+				barrier();
+			}
+			if (numLocalInvocations >= 2) {
+				if (gl_LocalInvocationIndex < 1) sumBuffer[gl_LocalInvocationIndex] += sumBuffer[gl_LocalInvocationIndex + 1];
+				barrier();
+			}
+			if (gl_LocalInvocationIndex == 0)
+				globalSumBuffer.data[globalWorkGroupID][counter] = sumBuffer[0];
+			++counter;
+		}
+}

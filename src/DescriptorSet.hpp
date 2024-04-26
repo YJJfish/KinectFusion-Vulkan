@@ -113,6 +113,7 @@ private:
 	vk::raii::Buffer _cameraParametersBuffer{ nullptr };
 	jjyou::vk::VmaAllocation _cameraParametersBufferMemory{ nullptr };
 	void* _cameraParametersBufferMemoryMappedAddress = nullptr;
+
 };
 
 /***********************************************************************
@@ -353,6 +354,7 @@ private:
 	vk::raii::Buffer _rayCastingParametersBuffer{ nullptr };
 	jjyou::vk::VmaAllocation _rayCastingParametersBufferMemory{ nullptr };
 	void* _rayCastingParametersBufferMemoryMappedAddress = nullptr;
+
 };
 
 /***********************************************************************
@@ -469,4 +471,156 @@ private:
 	vk::raii::Buffer _fusionParametersBuffer{ nullptr };
 	jjyou::vk::VmaAllocation _fusionParametersBufferMemory{ nullptr };
 	void* _fusionParametersBufferMemoryMappedAddress = nullptr;
+
+};
+
+/***********************************************************************
+ * @class	ICPDescriptorSet
+ * @brief	Descriptor set 2 in `buildLinearFunction.comp` and set 0 in
+ *			`buildLinearFunctionReduction.comp`.
+ ***********************************************************************/
+class ICPDescriptorSet {
+
+public:
+
+	/***********************************************************************
+	 * @class	ICPParameters
+	 * @brief	Binding 0 uniform buffer in the shaders.
+	 ***********************************************************************/
+	struct ICPParameters {
+		jjyou::glsl::mat4 frameInvView;		//!< The inverse of the current view matrix of the frame data.
+		jjyou::glsl::mat4 modelView;		//!< The current view matrix of the model data.
+		float fx, fy, cx, cy;				//!< The camera projection parameters of the model data.
+		float distanceThreshold;			//!< Distance threshold used in projective correspondence search.
+		float angleThreshold;				//!< Angle threshold used in projective correspondence search.
+	};
+
+	/***********************************************************************
+	 * @class	ReductionResult
+	 * @brief	Binding 2 uniform buffer in the shaders.
+	 ***********************************************************************/
+	struct ReductionResult {
+		float data[27];
+	};
+
+	/** @brief	Construct an empty descriptor set in invalid state.
+	  */
+	ICPDescriptorSet(std::nullptr_t) {}
+
+	/** @brief	Construct a descriptor set given the engine and the fusion.
+	  */
+	ICPDescriptorSet(
+		const Engine& engine_,
+		const KinectFusion& kinectFusion_
+	);
+
+	/** @brief	Copy constructor is disabled.
+	  */
+	ICPDescriptorSet(const ICPDescriptorSet&) = delete;
+
+	/** @brief	Move constructor.
+	  */
+	ICPDescriptorSet(ICPDescriptorSet&& other_) = default;
+
+	/** @brief	Copy assignment is disabled.
+	  */
+	ICPDescriptorSet& operator=(const ICPDescriptorSet&) = delete;
+
+	/** @brief	Move assignment.
+	  */
+	ICPDescriptorSet& operator=(ICPDescriptorSet&& other_) noexcept {
+		if (this != &other_) {
+			this->_pEngine = other_._pEngine;
+			this->_pKinectFusion = other_._pKinectFusion;
+			this->_descriptorSetLayout = other_._descriptorSetLayout;
+			this->_descriptorSet = std::move(other_._descriptorSet);
+			this->_icpParametersBuffer = std::move(other_._icpParametersBuffer);
+			this->_icpParametersBufferMemory = std::move(other_._icpParametersBufferMemory);
+			this->_icpParametersBufferMemoryMappedAddress = other_._icpParametersBufferMemoryMappedAddress;
+			this->_globalSumBufferBuffer = std::move(other_._globalSumBufferBuffer);
+			this->_globalSumBufferBufferMemory = std::move(other_._globalSumBufferBufferMemory);
+			this->_reductionResultBuffer = std::move(other_._reductionResultBuffer);
+			this->_reductionResultBufferMemory = std::move(other_._reductionResultBufferMemory);
+			this->_reductionResultBufferMemoryMappedAddress = other_._reductionResultBufferMemoryMappedAddress;
+		}
+		return *this;
+	}
+
+	/** @brief	Destructor.
+	  */
+	~ICPDescriptorSet(void) = default;
+
+	/** @brief	Get the descriptor set.
+	  */
+	const vk::raii::DescriptorSet& descriptorSet(void) const { return this->_descriptorSet; }
+
+	/** @brief	Get the mapped address for ICPParameters (binding 0).
+	  */
+	ICPParameters& icpParameters(void) const { return *reinterpret_cast<ICPDescriptorSet::ICPParameters*>(this->_icpParametersBufferMemoryMappedAddress); }
+
+	/** @brief	Get the mapped address for ReductionResult (binding 2).
+	  */
+	ReductionResult& reductionResult(void) const { return *reinterpret_cast<ICPDescriptorSet::ReductionResult*>(this->_reductionResultBufferMemoryMappedAddress); }
+
+	/** @brief	Bind the descriptor set.
+	  */
+	void bind(
+		const vk::raii::CommandBuffer& commandBuffer_,
+		vk::PipelineBindPoint pipelineBindPoint_,
+		const vk::raii::PipelineLayout& pipelineLayout_,
+		std::uint32_t setIndex_
+	) const {
+		commandBuffer_.bindDescriptorSets(pipelineBindPoint_, *pipelineLayout_, setIndex_, *this->_descriptorSet, nullptr);
+	}
+
+	/** @brief	Get the descriptor set layout.
+	  */
+	vk::DescriptorSetLayout descriptorSetLayout(void) const {
+		return this->_descriptorSetLayout;
+	}
+
+	/** @brief	Create the descriptor set layout.
+	  */
+	static vk::raii::DescriptorSetLayout createDescriptorSetLayout(const vk::raii::Device& device_) {
+		std::vector<vk::DescriptorSetLayoutBinding> descriptorSetLayoutBindings = {
+			vk::DescriptorSetLayoutBinding()
+			.setBinding(0)
+			.setDescriptorType(vk::DescriptorType::eUniformBuffer)
+			.setDescriptorCount(1)
+			.setStageFlags(vk::ShaderStageFlagBits::eCompute)
+			.setPImmutableSamplers(nullptr),
+			vk::DescriptorSetLayoutBinding()
+			.setBinding(1)
+			.setDescriptorType(vk::DescriptorType::eStorageBuffer)
+			.setDescriptorCount(1)
+			.setStageFlags(vk::ShaderStageFlagBits::eCompute)
+			.setPImmutableSamplers(nullptr),
+			vk::DescriptorSetLayoutBinding()
+			.setBinding(2)
+			.setDescriptorType(vk::DescriptorType::eStorageBuffer)
+			.setDescriptorCount(1)
+			.setStageFlags(vk::ShaderStageFlagBits::eCompute)
+			.setPImmutableSamplers(nullptr)
+		};
+		vk::DescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = vk::DescriptorSetLayoutCreateInfo()
+			.setFlags(vk::DescriptorSetLayoutCreateFlags(0))
+			.setBindings(descriptorSetLayoutBindings);
+		return vk::raii::DescriptorSetLayout(device_, descriptorSetLayoutCreateInfo);
+	}
+
+private:
+
+	const Engine* _pEngine = nullptr;
+	const KinectFusion* _pKinectFusion = nullptr;
+	vk::DescriptorSetLayout _descriptorSetLayout{ nullptr }; // Descriptor set layout should be owned by the engine.
+	vk::raii::DescriptorSet _descriptorSet{ nullptr };
+	vk::raii::Buffer _icpParametersBuffer{ nullptr };
+	jjyou::vk::VmaAllocation _icpParametersBufferMemory{ nullptr };
+	void* _icpParametersBufferMemoryMappedAddress = nullptr;
+	vk::raii::Buffer _globalSumBufferBuffer{ nullptr };
+	jjyou::vk::VmaAllocation _globalSumBufferBufferMemory{ nullptr };
+	vk::raii::Buffer _reductionResultBuffer{ nullptr };
+	jjyou::vk::VmaAllocation _reductionResultBufferMemory{ nullptr };
+	void* _reductionResultBufferMemoryMappedAddress = nullptr;
+
 };

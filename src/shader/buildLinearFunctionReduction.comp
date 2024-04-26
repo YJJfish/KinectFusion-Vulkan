@@ -1,0 +1,85 @@
+/***********************************************************************
+ * @file	buildLinearFunctionReduction.comp
+ * @author	jjyou
+ * @date	2024-4-25
+ * @brief	This file implements the shader function to compute the sum
+ *			of the outputs of `buildLinearFunction.comp`.
+***********************************************************************/
+
+#version 450
+
+layout (local_size_x = 1024) in;
+
+/** @brief	Storage buffer to store the 6x6 matrix A and 6d vector b.
+  *
+  *			This should be the output of `buildLinearFunction.comp`.
+  */
+layout(set = 0, binding = 1) readonly buffer GlobalSumBuffer {
+	uint size;			//<! The length of the first dimension of data.
+	float data[][27];
+} globalSumBuffer;
+
+/** @brief	Storage buffer to store the reduction result.
+  */
+layout(set = 0, binding = 2) buffer ReductionResult {
+	float data[27];
+} reductionResult;
+
+/** @brief	A buffer used to sum up values for all invocations within
+  *			the current work group.
+  */
+const uint numLocalInvocations = gl_WorkGroupSize.x;
+shared float sumBuffer[numLocalInvocations];
+
+void main() {
+	uint globalWorkGroupID = gl_WorkGroupID.x;
+	float sum = 0.0;
+    for (uint t = gl_LocalInvocationIndex; t < globalSumBuffer.size; t += gl_WorkGroupSize.x)
+        sum += globalSumBuffer.data[t][globalWorkGroupID];
+    sumBuffer[gl_LocalInvocationIndex] = sum;
+    barrier();
+    // Suppose the number of invocations within one work group won't exceed 1024.
+	// We can manually unroll a loop here.
+	if (numLocalInvocations >= 1024) {
+		if (gl_LocalInvocationIndex < 512) sumBuffer[gl_LocalInvocationIndex] += sumBuffer[gl_LocalInvocationIndex + 512];
+		barrier();
+	}
+	if (numLocalInvocations >= 512) {
+		if (gl_LocalInvocationIndex < 256) sumBuffer[gl_LocalInvocationIndex] += sumBuffer[gl_LocalInvocationIndex + 256];
+		barrier();
+	}
+	if (numLocalInvocations >= 256) {
+		if (gl_LocalInvocationIndex < 128) sumBuffer[gl_LocalInvocationIndex] += sumBuffer[gl_LocalInvocationIndex + 128];
+		barrier();
+	}
+	if (numLocalInvocations >= 128) {
+		if (gl_LocalInvocationIndex < 64) sumBuffer[gl_LocalInvocationIndex] += sumBuffer[gl_LocalInvocationIndex + 64];
+		barrier();
+	}
+	if (numLocalInvocations >= 64) {
+		if (gl_LocalInvocationIndex < 32) sumBuffer[gl_LocalInvocationIndex] += sumBuffer[gl_LocalInvocationIndex + 32];
+		barrier();
+	}
+	if (numLocalInvocations >= 32) {
+		if (gl_LocalInvocationIndex < 16) sumBuffer[gl_LocalInvocationIndex] += sumBuffer[gl_LocalInvocationIndex + 16];
+		barrier();
+	}
+	if (numLocalInvocations >= 16) {
+		if (gl_LocalInvocationIndex < 8) sumBuffer[gl_LocalInvocationIndex] += sumBuffer[gl_LocalInvocationIndex + 8];
+		barrier();
+	}
+	if (numLocalInvocations >= 8) {
+		if (gl_LocalInvocationIndex < 4) sumBuffer[gl_LocalInvocationIndex] += sumBuffer[gl_LocalInvocationIndex + 4];
+		barrier();
+	}
+	if (numLocalInvocations >= 4) {
+		if (gl_LocalInvocationIndex < 2) sumBuffer[gl_LocalInvocationIndex] += sumBuffer[gl_LocalInvocationIndex + 2];
+		barrier();
+	}
+	if (numLocalInvocations >= 2) {
+		if (gl_LocalInvocationIndex < 1) sumBuffer[gl_LocalInvocationIndex] += sumBuffer[gl_LocalInvocationIndex + 1];
+		barrier();
+	}
+    if (gl_LocalInvocationIndex == 0)
+        reductionResult.data[globalWorkGroupID] = sumBuffer[0];
+}

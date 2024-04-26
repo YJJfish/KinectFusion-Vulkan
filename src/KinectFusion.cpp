@@ -1,4 +1,6 @@
 #include "KinectFusion.hpp"
+#include <exception>
+#include <stdexcept>
 
 #define VK_THROW(err) \
 	throw std::runtime_error("[KinectFusion] Vulkan error in file " + std::string(__FILE__) + " line " + std::to_string(__LINE__) + ": " + vk::to_string(err))
@@ -27,6 +29,12 @@ KinectFusion::KinectFusion(
 	_maxDepth(maxDepth_),
 	_invalidDepth(invalidDepth_)
 {
+	if (depthFrameExtent_.width % (1U << KinectFusion::NUM_PYRAMID_LEVELS) != 0) {
+		throw std::logic_error("The width of depth frame is " + std::to_string(depthFrameExtent_.width) + " which is not a multiple of " + std::to_string(1U << KinectFusion::NUM_PYRAMID_LEVELS) + ".");
+	}
+	if (depthFrameExtent_.height % (1U << KinectFusion::NUM_PYRAMID_LEVELS) != 0) {
+		throw std::logic_error("The height of depth frame is " + std::to_string(depthFrameExtent_.height) + " which is not a multiple of " + std::to_string(1U << KinectFusion::NUM_PYRAMID_LEVELS) + ".");
+	}
 	this->_createDescriptorSetLayouts();
 	this->_tsdfVolume = TSDFVolume(*this->_pEngine, *this, resolution_, size_, corner_, truncationDistance_);
 	this->_createPipelineLayouts();
@@ -110,6 +118,8 @@ std::optional<jjyou::glsl::mat4> KinectFusion::estimatePose(
 	// 1. Apply bilateral filtering to the input depth map. Build pyramid. Generate vertex maps and normals.
 	
 	// 2. Perform ray casting to generate vertex maps and normals.
+
+	return std::nullopt;
 }
 
 void KinectFusion::fuse(
@@ -167,6 +177,12 @@ void KinectFusion::_createDescriptorSetLayouts(void) {
 	
 	// Fusion uniform block
 	this->_fusionDescriptorSetLayout = FusionDescriptorSet::createDescriptorSetLayout(this->_pEngine->context().device());
+
+	// Pyramid data
+	this->_pyramidDataDescriptorSetLayout = PyramidData::createDescriptorSetLayout(this->_pEngine->context().device());
+
+	// ICP
+	this->_icpDescriptorSetLayout = ICPDescriptorSet::createDescriptorSetLayout(this->_pEngine->context().device());
 }
 
 void KinectFusion::_createPipelineLayouts(void) {
@@ -208,6 +224,65 @@ void KinectFusion::_createPipelineLayouts(void) {
 			.setSetLayouts(descriptorSetLayouts)
 			.setPushConstantRanges(nullptr);
 		this->_fusionPipelineLayout = vk::raii::PipelineLayout(this->_pEngine->context().device(), pipelineLayoutCreateInfo);
+	}
+
+	// Bilateral filtering
+	{
+		std::vector<vk::DescriptorSetLayout> descriptorSetLayouts = {
+			*this->_pEngine->surfaceStorageDescriptorSetLayout(MaterialType::Simple),
+			*this->_pyramidDataDescriptorSetLayout
+		};
+		vk::PushConstantRange pushConstantRange = vk::PushConstantRange()
+			.setStageFlags(vk::ShaderStageFlagBits::eCompute)
+			.setOffset(0U)
+			.setSize(sizeof(KinectFusion::_BilateralFilteringParameters));
+		vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo = vk::PipelineLayoutCreateInfo()
+			.setFlags(vk::PipelineLayoutCreateFlags(0))
+			.setSetLayouts(descriptorSetLayouts)
+			.setPushConstantRanges(pushConstantRange);
+		this->_bilateralFilteringPipelineLayout = vk::raii::PipelineLayout(this->_pEngine->context().device(), pipelineLayoutCreateInfo);
+	}
+
+	// Compute vertex/normal map
+	{
+		std::vector<vk::DescriptorSetLayout> descriptorSetLayouts = {
+			*this->_pyramidDataDescriptorSetLayout
+		};
+		vk::PushConstantRange pushConstantRange = vk::PushConstantRange()
+			.setStageFlags(vk::ShaderStageFlagBits::eCompute)
+			.setOffset(0U)
+			.setSize(sizeof(KinectFusion::_CameraIntrinsics));
+		vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo = vk::PipelineLayoutCreateInfo()
+			.setFlags(vk::PipelineLayoutCreateFlags(0))
+			.setSetLayouts(descriptorSetLayouts)
+			.setPushConstantRanges(pushConstantRange);
+		this->_computeVertexNormalMapPipelineLayout = vk::raii::PipelineLayout(this->_pEngine->context().device(), pipelineLayoutCreateInfo);
+	}
+
+	// Build linear function
+	{
+		std::vector<vk::DescriptorSetLayout> descriptorSetLayouts = {
+			*this->_pyramidDataDescriptorSetLayout,
+			*this->_pyramidDataDescriptorSetLayout,
+			*this->_icpDescriptorSetLayout
+		};
+		vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo = vk::PipelineLayoutCreateInfo()
+			.setFlags(vk::PipelineLayoutCreateFlags(0))
+			.setSetLayouts(descriptorSetLayouts)
+			.setPushConstantRanges(nullptr);
+		this->_buildLinearFunctionPipelineLayout = vk::raii::PipelineLayout(this->_pEngine->context().device(), pipelineLayoutCreateInfo);
+	}
+
+	// Build linear function redunction
+	{
+		std::vector<vk::DescriptorSetLayout> descriptorSetLayouts = {
+			*this->_icpDescriptorSetLayout
+		};
+		vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo = vk::PipelineLayoutCreateInfo()
+			.setFlags(vk::PipelineLayoutCreateFlags(0))
+			.setSetLayouts(descriptorSetLayouts)
+			.setPushConstantRanges(nullptr);
+		this->_buildLinearFunctionReductionPipelineLayout = vk::raii::PipelineLayout(this->_pEngine->context().device(), pipelineLayoutCreateInfo);
 	}
 }
 
@@ -260,7 +335,7 @@ void KinectFusion::_createPipelines(void) {
 		this->_rayCastingPipeline = vk::raii::Pipeline(this->_pEngine->context().device(), nullptr, computePipelineCreateInfo);
 	}
 
-	// Ray casting
+	// Fusion
 	{
 #include "./shader/fusion.comp.spv.h"
 		vk::raii::ShaderModule shaderModule(this->_pEngine->context().device(), vk::ShaderModuleCreateInfo()
@@ -282,6 +357,150 @@ void KinectFusion::_createPipelines(void) {
 			.setBasePipelineHandle(nullptr)
 			.setBasePipelineIndex(0);
 		this->_fusionPipeline = vk::raii::Pipeline(this->_pEngine->context().device(), nullptr, computePipelineCreateInfo);
+	}
+
+	// Bilateral filtering
+	{
+#include "./shader/bilateralFiltering.comp.spv.h"
+		vk::raii::ShaderModule shaderModule(this->_pEngine->context().device(), vk::ShaderModuleCreateInfo()
+			.setFlags(vk::ShaderModuleCreateFlags(0))
+			.setPCode(reinterpret_cast<const uint32_t*>(bilateralFiltering_comp_spv))
+			.setCodeSize(sizeof(bilateralFiltering_comp_spv))
+		);
+		vk::ComputePipelineCreateInfo computePipelineCreateInfo = vk::ComputePipelineCreateInfo()
+			.setFlags(vk::PipelineCreateFlags(0))
+			.setStage(
+				vk::PipelineShaderStageCreateInfo()
+				.setFlags(vk::PipelineShaderStageCreateFlags(0))
+				.setStage(vk::ShaderStageFlagBits::eCompute)
+				.setModule(*shaderModule)
+				.setPName("main")
+				.setPSpecializationInfo(nullptr)
+			)
+			.setLayout(*this->_bilateralFilteringPipelineLayout)
+			.setBasePipelineHandle(nullptr)
+			.setBasePipelineIndex(0);
+		this->_bilateralFilteringPipeline = vk::raii::Pipeline(this->_pEngine->context().device(), nullptr, computePipelineCreateInfo);
+	}
+
+	// Ray casting for ICP
+	{
+#include "./shader/rayCastingICP.comp.spv.h"
+		vk::raii::ShaderModule shaderModule(this->_pEngine->context().device(), vk::ShaderModuleCreateInfo()
+			.setFlags(vk::ShaderModuleCreateFlags(0))
+			.setPCode(reinterpret_cast<const uint32_t*>(rayCastingICP_comp_spv))
+			.setCodeSize(sizeof(rayCastingICP_comp_spv))
+		);
+		vk::ComputePipelineCreateInfo computePipelineCreateInfo = vk::ComputePipelineCreateInfo()
+			.setFlags(vk::PipelineCreateFlags(0))
+			.setStage(
+				vk::PipelineShaderStageCreateInfo()
+				.setFlags(vk::PipelineShaderStageCreateFlags(0))
+				.setStage(vk::ShaderStageFlagBits::eCompute)
+				.setModule(*shaderModule)
+				.setPName("main")
+				.setPSpecializationInfo(nullptr)
+			)
+			.setLayout(*this->_rayCastingPipelineLayout) // Reuse the ray casting pipeline layout because `PyramidData` has the same descriptor layout as `Surface<MaterialType::Lambertian>`.
+			.setBasePipelineHandle(nullptr)
+			.setBasePipelineIndex(0);
+		this->_rayCastingICPPipeline = vk::raii::Pipeline(this->_pEngine->context().device(), nullptr, computePipelineCreateInfo);
+	}
+
+	// Compute vertex map
+	{
+#include "./shader/computeVertexMap.comp.spv.h"
+		vk::raii::ShaderModule shaderModule(this->_pEngine->context().device(), vk::ShaderModuleCreateInfo()
+			.setFlags(vk::ShaderModuleCreateFlags(0))
+			.setPCode(reinterpret_cast<const uint32_t*>(computeVertexMap_comp_spv))
+			.setCodeSize(sizeof(computeVertexMap_comp_spv))
+		);
+		vk::ComputePipelineCreateInfo computePipelineCreateInfo = vk::ComputePipelineCreateInfo()
+			.setFlags(vk::PipelineCreateFlags(0))
+			.setStage(
+				vk::PipelineShaderStageCreateInfo()
+				.setFlags(vk::PipelineShaderStageCreateFlags(0))
+				.setStage(vk::ShaderStageFlagBits::eCompute)
+				.setModule(*shaderModule)
+				.setPName("main")
+				.setPSpecializationInfo(nullptr)
+			)
+			.setLayout(*this->_computeVertexNormalMapPipelineLayout)
+			.setBasePipelineHandle(nullptr)
+			.setBasePipelineIndex(0);
+		this->_computeVertexMapPipeline = vk::raii::Pipeline(this->_pEngine->context().device(), nullptr, computePipelineCreateInfo);
+	}
+
+	// Compute normal map
+	{
+#include "./shader/computeNormalMap.comp.spv.h"
+		vk::raii::ShaderModule shaderModule(this->_pEngine->context().device(), vk::ShaderModuleCreateInfo()
+			.setFlags(vk::ShaderModuleCreateFlags(0))
+			.setPCode(reinterpret_cast<const uint32_t*>(computeNormalMap_comp_spv))
+			.setCodeSize(sizeof(computeNormalMap_comp_spv))
+		);
+		vk::ComputePipelineCreateInfo computePipelineCreateInfo = vk::ComputePipelineCreateInfo()
+			.setFlags(vk::PipelineCreateFlags(0))
+			.setStage(
+				vk::PipelineShaderStageCreateInfo()
+				.setFlags(vk::PipelineShaderStageCreateFlags(0))
+				.setStage(vk::ShaderStageFlagBits::eCompute)
+				.setModule(*shaderModule)
+				.setPName("main")
+				.setPSpecializationInfo(nullptr)
+			)
+			.setLayout(*this->_computeVertexNormalMapPipelineLayout)
+			.setBasePipelineHandle(nullptr)
+			.setBasePipelineIndex(0);
+		this->_computeNormalMapPipeline = vk::raii::Pipeline(this->_pEngine->context().device(), nullptr, computePipelineCreateInfo);
+	}
+
+	// Build linear function
+	{
+#include "./shader/buildLinearFunction.comp.spv.h"
+		vk::raii::ShaderModule shaderModule(this->_pEngine->context().device(), vk::ShaderModuleCreateInfo()
+			.setFlags(vk::ShaderModuleCreateFlags(0))
+			.setPCode(reinterpret_cast<const uint32_t*>(buildLinearFunction_comp_spv))
+			.setCodeSize(sizeof(buildLinearFunction_comp_spv))
+		);
+		vk::ComputePipelineCreateInfo computePipelineCreateInfo = vk::ComputePipelineCreateInfo()
+			.setFlags(vk::PipelineCreateFlags(0))
+			.setStage(
+				vk::PipelineShaderStageCreateInfo()
+				.setFlags(vk::PipelineShaderStageCreateFlags(0))
+				.setStage(vk::ShaderStageFlagBits::eCompute)
+				.setModule(*shaderModule)
+				.setPName("main")
+				.setPSpecializationInfo(nullptr)
+			)
+			.setLayout(*this->_buildLinearFunctionPipelineLayout)
+			.setBasePipelineHandle(nullptr)
+			.setBasePipelineIndex(0);
+		this->_buildLinearFunctionPipeline = vk::raii::Pipeline(this->_pEngine->context().device(), nullptr, computePipelineCreateInfo);
+	}
+
+	// Build linear function reduction
+	{
+#include "./shader/buildLinearFunctionReduction.comp.spv.h"
+		vk::raii::ShaderModule shaderModule(this->_pEngine->context().device(), vk::ShaderModuleCreateInfo()
+			.setFlags(vk::ShaderModuleCreateFlags(0))
+			.setPCode(reinterpret_cast<const uint32_t*>(buildLinearFunctionReduction_comp_spv))
+			.setCodeSize(sizeof(buildLinearFunctionReduction_comp_spv))
+		);
+		vk::ComputePipelineCreateInfo computePipelineCreateInfo = vk::ComputePipelineCreateInfo()
+			.setFlags(vk::PipelineCreateFlags(0))
+			.setStage(
+				vk::PipelineShaderStageCreateInfo()
+				.setFlags(vk::PipelineShaderStageCreateFlags(0))
+				.setStage(vk::ShaderStageFlagBits::eCompute)
+				.setModule(*shaderModule)
+				.setPName("main")
+				.setPSpecializationInfo(nullptr)
+			)
+			.setLayout(*this->_buildLinearFunctionReductionPipelineLayout)
+			.setBasePipelineHandle(nullptr)
+			.setBasePipelineIndex(0);
+		this->_buildLinearFunctionReductionPipeline = vk::raii::Pipeline(this->_pEngine->context().device(), nullptr, computePipelineCreateInfo);
 	}
 }
 
@@ -372,5 +591,16 @@ void KinectFusion::_createAlgorithmData(void) {
 			.setWaitDstStageMask(nullptr)
 			.setCommandBuffers(*commandBuffer)
 			.setSignalSemaphores(nullptr);
+	}
+
+	// Pose estimation
+	{
+		vk::Extent2D levelExtent = _depthFrameExtent;
+		for (std::uint32_t level = 0; level < KinectFusion::NUM_PYRAMID_LEVELS; ++level) {
+			this->_poseEstimationAlgorithmData.modelPyramid[level] = PyramidData(*this->_pEngine, *this, levelExtent);
+			this->_poseEstimationAlgorithmData.framePyramid[level] = PyramidData(*this->_pEngine, *this, levelExtent);
+			levelExtent.width /= 2U;
+			levelExtent.height /= 2U;
+		}
 	}
 }

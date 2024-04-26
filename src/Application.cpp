@@ -8,7 +8,7 @@
 
 Application::Application(void) :
 	_headlessMode(false),
-	_debugMode(false)
+	_debugMode(true)
 {
 	// Load dataset
 	/*this->_pDataLoader.reset(new VirtualDataLoader(

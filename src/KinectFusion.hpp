@@ -2,6 +2,7 @@
 #include "TSDFVolume.hpp"
 #include "Engine.hpp"
 #include "Camera.hpp"
+#include "PyramidData.hpp"
 
 /***********************************************************************
  * @class	KinectFusion
@@ -160,6 +161,18 @@ public:
 		return this->_fusionDescriptorSetLayout;
 	}
 
+	/** @brief	Get the descriptor set layout for pyramid data.
+	  */
+	const vk::raii::DescriptorSetLayout& pyramidDataDescriptorSetLayout(void) const {
+		return this->_pyramidDataDescriptorSetLayout;
+	}
+
+	/** @brief	Get the descriptor set layout for ICP.
+	  */
+	const vk::raii::DescriptorSetLayout& icpDescriptorSetLayout(void) const {
+		return this->_icpDescriptorSetLayout;
+	}
+
 private:
 
 	const Engine* _pEngine = nullptr;
@@ -172,13 +185,25 @@ private:
 	vk::raii::DescriptorSetLayout _tsdfVolumeDescriptorSetLayout{ nullptr };
 	vk::raii::DescriptorSetLayout _rayCastingDescriptorSetLayout{ nullptr };
 	vk::raii::DescriptorSetLayout _fusionDescriptorSetLayout{ nullptr };
+	vk::raii::DescriptorSetLayout _pyramidDataDescriptorSetLayout{ nullptr };
+	vk::raii::DescriptorSetLayout _icpDescriptorSetLayout{ nullptr };
 	TSDFVolume _tsdfVolume{ nullptr };
 	vk::raii::PipelineLayout _initVolumePipelineLayout{ nullptr };
 	vk::raii::PipelineLayout _rayCastingPipelineLayout{ nullptr };
 	vk::raii::PipelineLayout _fusionPipelineLayout{ nullptr };
+	vk::raii::PipelineLayout _bilateralFilteringPipelineLayout{ nullptr };
+	vk::raii::PipelineLayout _computeVertexNormalMapPipelineLayout{ nullptr };
+	vk::raii::PipelineLayout _buildLinearFunctionPipelineLayout{ nullptr };
+	vk::raii::PipelineLayout _buildLinearFunctionReductionPipelineLayout{ nullptr };
 	vk::raii::Pipeline _initVolumePipeline{ nullptr };
 	vk::raii::Pipeline _rayCastingPipeline{ nullptr };
 	vk::raii::Pipeline _fusionPipeline{ nullptr };
+	vk::raii::Pipeline _bilateralFilteringPipeline{ nullptr };
+	vk::raii::Pipeline _rayCastingICPPipeline{ nullptr };
+	vk::raii::Pipeline _computeVertexMapPipeline{ nullptr };
+	vk::raii::Pipeline _computeNormalMapPipeline{ nullptr };
+	vk::raii::Pipeline _buildLinearFunctionPipeline{ nullptr };
+	vk::raii::Pipeline _buildLinearFunctionReductionPipeline{ nullptr };
 
 	struct _InitVolumeAlgorithmData {
 		vk::raii::CommandBuffer commandBuffer{ nullptr };
@@ -200,8 +225,30 @@ private:
 		vk::SubmitInfo submitInfo{};
 	} _fusionAlgorithmData{};
 
+	struct _PoseEstimationAlgorithmData {
+		std::array<PyramidData, KinectFusion::NUM_PYRAMID_LEVELS> modelPyramid{ {PyramidData{nullptr}, PyramidData{nullptr}, PyramidData{nullptr}} };
+		std::array<PyramidData, KinectFusion::NUM_PYRAMID_LEVELS> framePyramid{ {PyramidData{nullptr}, PyramidData{nullptr}, PyramidData{nullptr}} };
+	} _poseEstimationAlgorithmData{};
+
 	void _createDescriptorSetLayouts(void);
 	void _createPipelineLayouts(void);
 	void _createPipelines(void);
 	void _createAlgorithmData(void);
+
+	/** @brief	Push constants.
+	  */
+	struct _BilateralFilteringParameters {
+		float sigmaColor;	//!< The sigma value controlling the color term.
+		float sigmaSpace;	//!< The sigma value controlling the space term.
+		int d;				//!< The diameter of the filter area. It should be an odd number.
+		float minDepth;
+		float maxDepth;
+		float invalidDepth;
+	};
+
+	/** @brief	Push constants.
+	  */
+	struct _CameraIntrinsics {
+		float fx, fy, cx, cy;
+	};
 };
