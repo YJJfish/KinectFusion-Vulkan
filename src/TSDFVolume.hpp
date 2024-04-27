@@ -24,9 +24,9 @@ public:
 	 * @class	TSDFParams
 	 * @brief	TSDF volume storage buffer header.
 	 * 
-	 * In the compute shader, the TSDF volume storage buffer header is
-	 * made up of two parts: The header which includes the parameters;
-	 * And an array of ivec2 which includes the data (tsdf + weight + color). 
+	 * In the compute shader, the TSDF volume storage buffer is made up of
+	 * two parts: The header which includes the parameters; And an array of ivec2
+	 * which includes the data (tsdf + weight + color).
 	 * This C++ structure corresponds to the header.
 	 ***********************************************************************/
 	struct TSDFParams {

@@ -183,6 +183,10 @@ public:
 	  *			If they are not, you may wish to call `fromGraphics` to recompute
 	  *			the x/y field of view.
 	  */
+	void resize(vk::Extent2D extent_) {
+		this->width = extent_.width;
+		this->height = extent_.height;
+	}
 	void resize(std::uint32_t width_, std::uint32_t height_) {
 		this->width = width_;
 		this->height = height_;

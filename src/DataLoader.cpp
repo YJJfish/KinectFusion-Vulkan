@@ -1,6 +1,7 @@
 #include "DataLoader.hpp"
 #include <exception>
 #include <stdexcept>
+#include <numbers>
 #include <stb_image.h>
 
 VirtualDataLoader::VirtualDataLoader(
@@ -12,7 +13,14 @@ VirtualDataLoader::VirtualDataLoader(
 	this->_camera = Camera::fromGraphics(std::nullopt, std::numbers::pi_v<float> / 3.0f, this->minDepth(), this->maxDepth(), this->_extent.width, this->_extent.height);
 	this->_sceneViewer.reset();
 	this->_sceneViewer.setCenter(this->_center);
-	this->_sceneViewer.setZoomRate(std::max(2.0f, 3.0f * this->_length));
+	this->_sceneViewer.setZoomRate(1.5f * this->_length);
+	// dYaw: [pi*(5.0/24.0), pi*(7.0/24.0)]
+	this->_yawRange = jjyou::glsl::vec2(std::numbers::pi_v<float> * 5.0f / 24.0f, std::numbers::pi_v<float> * 7.0f / 24.0f);
+	this->_yawHalfPeriod = 120U;
+	// dPitch: [pi/6.0, pi/4.0]
+	this->_pitchRange = jjyou::glsl::vec2(std::numbers::pi_v<float> / 6.0f, std::numbers::pi_v<float> / 4.0f);
+	this->_pitchHalfPeriod = 50U;
+	this->_sceneViewer.turn(this->_yawRange.x, this->_pitchRange.x, 0.0f);
 	this->_initialPose = this->_sceneViewer.getViewMatrix();
 	this->_colorMap.reset(new FrameData::ColorPixel[this->_extent.width * this->_extent.height]{});
 	this->_depthMap.reset(new FrameData::DepthPixel[this->_extent.width * this->_extent.height]{});
@@ -60,8 +68,10 @@ FrameData VirtualDataLoader::getFrame(void) {
 				depthPixel = hitDepth;
 			}
 		}
-	float dYaw = 0.015f;
-	float dPitch = (((this->_frameIndex + 20) / 40) % 2) ? 0.05f : -0.05f;
+	float dYaw = (this->_yawRange.y - this->_yawRange.x) / static_cast<float>(this->_yawHalfPeriod);
+	dYaw *= ((this->_frameIndex / this->_yawHalfPeriod) % 2) ? -1.0f : 1.0f;
+	float dPitch = (this->_pitchRange.y - this->_pitchRange.x) / static_cast<float>(this->_pitchHalfPeriod);
+	dPitch *= ((this->_frameIndex / this->_pitchHalfPeriod) % 2) ? -1.0f : 1.0f;
 	this->_sceneViewer.turn(dYaw, dPitch, 0.0f);
 	++this->_frameIndex;
 	return res;

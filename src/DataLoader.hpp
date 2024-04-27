@@ -203,6 +203,10 @@ private:
 	Camera _camera{};
 	jjyou::glsl::mat4 _initialPose{};
 	jjyou::vis::SceneView _sceneViewer{};
+	jjyou::glsl::vec2 _yawRange{};
+	std::uint32_t _yawHalfPeriod = 0U;
+	jjyou::glsl::vec2 _pitchRange{};
+	std::uint32_t _pitchHalfPeriod = 0U;
 	std::unique_ptr<FrameData::ColorPixel[]> _colorMap{};
 	std::unique_ptr<FrameData::DepthPixel[]> _depthMap{};
 

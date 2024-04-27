@@ -42,264 +42,9 @@ layout (set = 2, binding = 0, r32f) uniform image2D outputDepthImage;
 layout (set = 2, binding = 1, rgba32f) uniform image2D outputVertexMap;
 layout (set = 2, binding = 2, rgba32f) uniform image2D outputNormalMap;
 
-/** @brief	Helper function to pack float TSDF and integer weight into two shorts.
-  */
-void packVoxel(in float tsdf, in int weight, out int packedVoxel) {
-	packedVoxel = (int(tsdf * 32767.0) << 16) | weight;
-}
+#include "tsdfVolumeCommon.h"
 
-/** @brief	Helper function to unpack two shorts to float TSDF and integer weight.
-  */
-void unpackVoxel(in int packedVoxel, out float tsdf, out int weight) {
-	tsdf = float(packedVoxel >> 16) * (1.0 / 32767.0);
-	weight = packedVoxel & 0x0000FFFF;
-}
-
-/** @brief	Helper function to pack 4 channel color into an int.
-  */
-void packColor(in vec4 color, out int packedColor) {
-	packedColor = int(packUnorm4x8(color));
-}
-
-/** @brief	Helper function to unpack an int to 4 channel color.
-  */
-void unpackColor(in int packedColor, out vec4 color) {
-	color = unpackUnorm4x8(uint(packedColor));
-}
-
-/** @brief	Helper function that compute the min intersection distance.
-  */
-float getMinT(vec3 rayOrigin, vec3 rayDir, vec3 minCorner, vec3 maxCorner) {
-	float xMin = ((rayDir.x > 0.0 ? minCorner.x : maxCorner.x) - rayOrigin.x) / rayDir.x;
-	float yMin = ((rayDir.y > 0.0 ? minCorner.y : maxCorner.y) - rayOrigin.y) / rayDir.y;
-	float zMin = ((rayDir.z > 0.0 ? minCorner.z : maxCorner.z) - rayOrigin.z) / rayDir.z;
-	return max(max(xMin, yMin), zMin);
-}
-
-/** @brief	Helper function that compute the max intersection distance.
-  */
-float getMaxT(vec3 rayOrigin, vec3 rayDir, vec3 minCorner, vec3 maxCorner) {
-	float xMax = ((rayDir.x > 0.0 ? maxCorner.x : minCorner.x) - rayOrigin.x) / rayDir.x;
-	float yMax = ((rayDir.y > 0.0 ? maxCorner.y : minCorner.y) - rayOrigin.y) / rayDir.y;
-	float zMax = ((rayDir.z > 0.0 ? maxCorner.z : minCorner.z) - rayOrigin.z) / rayDir.z;
-	return min(min(xMax, yMax), zMax);
-}
-
-/** @brief	Helper function to read a voxel.
-  * @note	It's the caller's reponsibility to make sure `index` is within valid range.
-  */
-ivec2 readVoxelData(uvec3 index) {
-	return tsdfVolume.data[(index.x *  tsdfVolume.resolution.y + index.y) * tsdfVolume.resolution.z + index.z];
-}
-
-/** @brief	Compute the coefficients of trilinear interpolation.
-  * @sa		https://en.wikipedia.org/wiki/Trilinear_interpolation#Alternative_algorithm
-  *	@param	tsdf			The 8 nearest voxels' TSDF value
-  *	@param	coeff			Output coefficients.
-  *
-  *			Since we normalized the position to [0, 1]^3, the formula can be simplified
-  *			a lot. (Plugging x0=y0=z0=0 and x1=y1=z1=1 into the original formula.)
-  */
-void getCoefficients(in float tsdf[2][2][2], out float coeff[8]) {
-	coeff[0] = tsdf[0][0][0];
-	coeff[1] = -tsdf[0][0][0] + tsdf[1][0][0];
-	coeff[2] = -tsdf[0][0][0] + tsdf[0][1][0];
-	coeff[3] = -tsdf[0][0][0] + tsdf[0][0][1];
-	coeff[4] = tsdf[0][0][0] - tsdf[0][1][0] - tsdf[1][0][0] + tsdf[1][1][0];
-	coeff[5] = tsdf[0][0][0] - tsdf[0][0][1] - tsdf[1][0][0] + tsdf[1][0][1];
-	coeff[6] = tsdf[0][0][0] - tsdf[0][0][1] - tsdf[0][1][0] + tsdf[0][1][1];
-	coeff[7] = -tsdf[0][0][0] + tsdf[0][0][1] + tsdf[0][1][0] - tsdf[0][1][1] + tsdf[1][0][0] - tsdf[1][0][1] - tsdf[1][1][0] + tsdf[1][1][1];
-}
-
-/** @brief	Compute the coefficients of trilinear interpolation.
-  * @sa		https://en.wikipedia.org/wiki/Trilinear_interpolation#Alternative_algorithm
-  *	@param	color			The 8 nearest voxels' color value
-  *	@param	coeff			Output coefficients.
-  */
-void getCoefficients(in vec4 color[2][2][2], out vec4 coeff[8]) {
-	coeff[0] = color[0][0][0];
-	coeff[1] = -color[0][0][0] + color[1][0][0];
-	coeff[2] = -color[0][0][0] + color[0][1][0];
-	coeff[3] = -color[0][0][0] + color[0][0][1];
-	coeff[4] = color[0][0][0] - color[0][1][0] - color[1][0][0] + color[1][1][0];
-	coeff[5] = color[0][0][0] - color[0][0][1] - color[1][0][0] + color[1][0][1];
-	coeff[6] = color[0][0][0] - color[0][0][1] - color[0][1][0] + color[0][1][1];
-	coeff[7] = -color[0][0][0] + color[0][0][1] + color[0][1][0] - color[0][1][1] + color[1][0][0] - color[1][0][1] - color[1][1][0] + color[1][1][1];
-}
-
-/** @brief	Helper function to get the base index of the voxel for a world space position.
-  */
-uvec3 getBaseIndex(vec3 pos) {
-	uvec3 baseIndex = uvec3((pos - tsdfVolume.corner) / tsdfVolume.size);
-	baseIndex[0] = min(max(baseIndex[0], 0), tsdfVolume.resolution[0] - 1);
-	baseIndex[1] = min(max(baseIndex[1], 0), tsdfVolume.resolution[1] - 1);
-	baseIndex[2] = min(max(baseIndex[2], 0), tsdfVolume.resolution[2] - 1);
-	return baseIndex;
-}
-
-/** @brief	Helper function to interpolate the TSDF value.
-  * @note	It's the caller's reponsibility to make sure `pos` is within valid range.
-  * @param	pos		The position in world space.
-  * @param	valid	Indicate whether the 8 corners contain zero-weighted voxels.
-  * @return			The interpolated TSDF value.
-  */
-float interpolateTSDF(in vec3 pos, out bool valid) {
-	valid = true;
-	uvec3 baseIndex = getBaseIndex(pos);
-	// Normalize pos to [0, 1]^3
-	vec3 normalizedPos = (pos - tsdfVolume.corner) / tsdfVolume.size - vec3(baseIndex);
-	// Read 8 nearest voxels.
-	float tsdf[2][2][2];
-	for (uint dx = 0; dx < 2; ++dx)
-		for (uint dy = 0; dy < 2; ++dy)
-			for (uint dz = 0; dz < 2; ++dz) {
-				int weight;
-				unpackVoxel(readVoxelData(baseIndex + uvec3(dx, dy, dz)).x, tsdf[dx][dy][dz], weight);
-				if (weight == 0) valid = false;
-			}
-	// Interpolate
-	float coeff[8];
-	getCoefficients(tsdf, coeff);
-	float interpolated = \
-		coeff[0] +
-		coeff[1] * normalizedPos.x + \
-		coeff[2] * normalizedPos.y + \
-		coeff[3] * normalizedPos.z + \
-		coeff[4] * normalizedPos.x * normalizedPos.y + \
-		coeff[5] * normalizedPos.x * normalizedPos.z + \
-		coeff[6] * normalizedPos.y * normalizedPos.z + \
-		coeff[7] * normalizedPos.x * normalizedPos.y * normalizedPos.z;
-	return interpolated;
-}
-
-/** @brief	Helper function to interpolate the color value.
-  * @note	It's the caller's reponsibility to make sure `pos` is within valid range.
-  * @param	pos		The position in world space.
-  * @return			The interpolated color value.
-  */
-vec4 interpolateColor(vec3 pos) {
-	uvec3 baseIndex = getBaseIndex(pos);
-	// Normalize pos to [0, 1]^3
-	vec3 normalizedPos = (pos - tsdfVolume.corner) / tsdfVolume.size - vec3(baseIndex);
-	// Read 8 nearest voxels.
-	vec4 color[2][2][2];
-	for (uint dx = 0; dx < 2; ++dx)
-		for (uint dy = 0; dy < 2; ++dy)
-			for (uint dz = 0; dz < 2; ++dz) {
-				unpackColor(readVoxelData(baseIndex + uvec3(dx, dy, dz)).y, color[dx][dy][dz]);
-			}
-	// Interpolate
-	vec4 coeff[8];
-	getCoefficients(color, coeff);
-	vec4 interpolated = \
-		coeff[0] +
-		coeff[1] * normalizedPos.x + \
-		coeff[2] * normalizedPos.y + \
-		coeff[3] * normalizedPos.z + \
-		coeff[4] * normalizedPos.x * normalizedPos.y + \
-		coeff[5] * normalizedPos.x * normalizedPos.z + \
-		coeff[6] * normalizedPos.y * normalizedPos.z + \
-		coeff[7] * normalizedPos.x * normalizedPos.y * normalizedPos.z;
-	return interpolated;
-}
-
-/** @brief	Helper function to compute the normal at a point on the zero-surface.
-  * @note	It's the caller's reponsibility to make sure `pos` is within valid range.
-  * @param	pos		The position in world space. It should be on the zero-surface.
-  * @return			The interpolated TSDF value.
-  */
-vec3 computeNormal(vec3 pos) {
-	uvec3 baseIndex = getBaseIndex(pos);
-	// Normalize pos to [0, 1]^3
-	vec3 normalizedPos = (pos - tsdfVolume.corner) / tsdfVolume.size - vec3(baseIndex);
-	// Read 8 nearest voxels.
-	float tsdf[2][2][2];
-	for (uint dx = 0; dx < 2; ++dx)
-		for (uint dy = 0; dy < 2; ++dy)
-			for (uint dz = 0; dz < 2; ++dz) {
-				int weight;
-				unpackVoxel(readVoxelData(baseIndex + uvec3(dx, dy, dz)).x, tsdf[dx][dy][dz], weight);
-			}
-	// Get the coefficients of trilinear interpolation.
-	float coeff[8];
-	getCoefficients(tsdf, coeff);
-	// The normal should be the gradient of the interpolated TSDF.
-	vec3 normal = normalize(vec3(
-		coeff[1] + coeff[4] * normalizedPos.y + coeff[5] * normalizedPos.z + coeff[7] * normalizedPos.y * normalizedPos.z,
-		coeff[2] + coeff[4] * normalizedPos.x + coeff[6] * normalizedPos.z + coeff[7] * normalizedPos.x * normalizedPos.z,
-		coeff[3] + coeff[5] * normalizedPos.x + coeff[6] * normalizedPos.y + coeff[7] * normalizedPos.x * normalizedPos.y
-	));
-	return normal;
-}
-
-/** @brief	Function that actually does ray casting.
-  */
-bool rayCasting(
-	in vec3 rayOrigin, in vec3 rayDir, in float scaleFactor,
-	out float outDepth, out vec3 outVertex, out vec3 outNormal
-) {
-	// Compute t range
-	rayDir.x = (rayDir.x == 0.0) ? 1e-5 : rayDir.x;
-	rayDir.y = (rayDir.y == 0.0) ? 1e-5 : rayDir.y;
-	rayDir.z = (rayDir.z == 0.0) ? 1e-5 : rayDir.z;
-	vec3 minCorner = tsdfVolume.corner;
-	vec3 maxCorner = tsdfVolume.corner + vec3(tsdfVolume.resolution - 1) * tsdfVolume.size;
-	float minT = getMinT(rayOrigin, rayDir, minCorner, maxCorner);
-	minT = max(minT, rayCastingParameters.minDepth * scaleFactor);
-	float maxT = getMaxT(rayOrigin, rayDir, minCorner, maxCorner);
-	maxT = min(maxT, rayCastingParameters.maxDepth * scaleFactor);
-	if (minT >= maxT)
-		return false;
-	// Start ray casting
-	float currT = minT + 1e-5;
-	float lastT = -1.0;
-	float currTSDF = -1.0;
-	float lastTSDF = -1.0;
-	while (currT < maxT) {
-		bool valid = true;
-		currTSDF = interpolateTSDF(rayOrigin + rayDir * currT, valid);
-		if (!valid) {
-			// One or more surrounding voxels are zero-weighted. Continue marching.
-			lastT = currT;
-			currT += tsdfVolume.truncationDistance * 0.95;
-			lastTSDF = -1.0;
-			continue;
-		}
-		else if (currTSDF > 1e-5) {
-			// Still outside of the zero-surface. Continue marching.
-			lastT = currT;
-			currT += max(rayCastingParameters.marchingStep, tsdfVolume.truncationDistance * currTSDF * 0.95);
-			lastTSDF = currTSDF;
-			continue;
-		}
-		else if (currTSDF < -1e-5) {
-			// Inside of the zero-surface.
-			if (lastTSDF > 0.0) {
-				// Find zero-surface.
-				float t = lastT + (currT - lastT) * lastTSDF / (lastTSDF - currTSDF);
-				vec3 pos = rayOrigin + t * rayDir;
-				outDepth = t / scaleFactor;
-				outVertex = pos;
-				outNormal = computeNormal(pos);
-				return true;
-			}
-			else {
-				// Failed.
-				return false;
-			}
-		}
-		else {
-			// Find zero-surface.
-			float t = currT;
-			vec3 pos = rayOrigin + t * rayDir;
-			outDepth = t / scaleFactor;
-			outVertex = pos;
-			outNormal = computeNormal(pos);
-			return true;
-		}
-	}
-	return false;
-}
+#include "rayCastingCommon.h"
 
 void main(){
 
@@ -322,12 +67,19 @@ void main(){
 	float outDepth;
 	vec3 outVertex;
 	vec3 outNormal;
-	float mask = 1.0;
-	if (!rayCasting(rayOrigin, rayDir, scaleFactor, outDepth, outVertex, outNormal)) {
+	float mask;
+	float rayCastingResult = rayCasting(rayOrigin, rayDir, rayCastingParameters.minDepth * scaleFactor, rayCastingParameters.maxDepth * scaleFactor);
+	if (isinf(rayCastingResult)) {
 		outDepth = 1.0 / 0.0;
 		outVertex = vec3(0.0, 0.0, 0.0);
 		outNormal = vec3(0.0, 0.0, 0.0);
 		mask = 0.0;
+	} else {
+		vec3 pos = rayOrigin + rayCastingResult * rayDir;
+		outDepth = rayCastingResult / scaleFactor;
+		outVertex = pos;
+		outNormal = computeNormal(pos);
+		mask = 1.0;
 	}
 
 	// Store

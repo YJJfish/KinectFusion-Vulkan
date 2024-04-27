@@ -565,13 +565,13 @@ void Engine::_createPipelines() {
 
 	// simple primitive
 	{
-#include "./shader/simplePrimitive.vert.spv.h"
+#include "./shader/spv/simplePrimitive.vert.spv.h"
 		vk::raii::ShaderModule vertShaderModule(this->_context.device(), vk::ShaderModuleCreateInfo()
 			.setFlags(vk::ShaderModuleCreateFlags(0))
 			.setPCode(reinterpret_cast<const uint32_t*>(simplePrimitive_vert_spv))
 			.setCodeSize(sizeof(simplePrimitive_vert_spv))
 		);
-#include "./shader/simplePrimitive.frag.spv.h"
+#include "./shader/spv/simplePrimitive.frag.spv.h"
 		vk::raii::ShaderModule fragShaderModule(this->_context.device(), vk::ShaderModuleCreateInfo()
 			.setFlags(vk::ShaderModuleCreateFlags(0))
 			.setPCode(reinterpret_cast<const uint32_t*>(simplePrimitive_frag_spv))
@@ -616,13 +616,13 @@ void Engine::_createPipelines() {
 
 	// lambertian primitive
 	{
-#include "./shader/lambertianPrimitive.vert.spv.h"
+#include "./shader/spv/lambertianPrimitive.vert.spv.h"
 		vk::raii::ShaderModule vertShaderModule(this->_context.device(), vk::ShaderModuleCreateInfo()
 			.setFlags(vk::ShaderModuleCreateFlags(0))
 			.setPCode(reinterpret_cast<const uint32_t*>(lambertianPrimitive_vert_spv))
 			.setCodeSize(sizeof(lambertianPrimitive_vert_spv))
 		);
-#include "./shader/lambertianPrimitive.frag.spv.h"
+#include "./shader/spv/lambertianPrimitive.frag.spv.h"
 		vk::raii::ShaderModule fragShaderModule(this->_context.device(), vk::ShaderModuleCreateInfo()
 			.setFlags(vk::ShaderModuleCreateFlags(0))
 			.setPCode(reinterpret_cast<const uint32_t*>(lambertianPrimitive_frag_spv))
@@ -667,13 +667,13 @@ void Engine::_createPipelines() {
 	
 	// simple surface
 	{
-#include "./shader/surface.vert.spv.h"
+#include "./shader/spv/surface.vert.spv.h"
 		vk::raii::ShaderModule vertShaderModule(this->_context.device(), vk::ShaderModuleCreateInfo()
 			.setFlags(vk::ShaderModuleCreateFlags(0))
 			.setPCode(reinterpret_cast<const uint32_t*>(surface_vert_spv))
 			.setCodeSize(sizeof(surface_vert_spv))
 		);
-#include "./shader/simpleSurface.frag.spv.h"
+#include "./shader/spv/simpleSurface.frag.spv.h"
 		vk::raii::ShaderModule fragShaderModule(this->_context.device(), vk::ShaderModuleCreateInfo()
 			.setFlags(vk::ShaderModuleCreateFlags(0))
 			.setPCode(reinterpret_cast<const uint32_t*>(simpleSurface_frag_spv))
@@ -711,13 +711,13 @@ void Engine::_createPipelines() {
 
 	// lambertian surface
 	{
-#include "./shader/surface.vert.spv.h"
+#include "./shader/spv/surface.vert.spv.h"
 		vk::raii::ShaderModule vertShaderModule(this->_context.device(), vk::ShaderModuleCreateInfo()
 			.setFlags(vk::ShaderModuleCreateFlags(0))
 			.setPCode(reinterpret_cast<const uint32_t*>(surface_vert_spv))
 			.setCodeSize(sizeof(surface_vert_spv))
 		);
-#include "./shader/lambertianSurface.frag.spv.h"
+#include "./shader/spv/lambertianSurface.frag.spv.h"
 		vk::raii::ShaderModule fragShaderModule(this->_context.device(), vk::ShaderModuleCreateInfo()
 			.setFlags(vk::ShaderModuleCreateFlags(0))
 			.setPCode(reinterpret_cast<const uint32_t*>(lambertianSurface_frag_spv))

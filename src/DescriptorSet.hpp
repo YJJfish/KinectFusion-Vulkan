@@ -511,7 +511,8 @@ public:
 	  */
 	ICPDescriptorSet(
 		const Engine& engine_,
-		const KinectFusion& kinectFusion_
+		const KinectFusion& kinectFusion_,
+		std::uint32_t globalSumBufferLength_
 	);
 
 	/** @brief	Copy constructor is disabled.
@@ -537,6 +538,7 @@ public:
 			this->_icpParametersBuffer = std::move(other_._icpParametersBuffer);
 			this->_icpParametersBufferMemory = std::move(other_._icpParametersBufferMemory);
 			this->_icpParametersBufferMemoryMappedAddress = other_._icpParametersBufferMemoryMappedAddress;
+			this->_globalSumBufferSize = other_._globalSumBufferSize;
 			this->_globalSumBufferBuffer = std::move(other_._globalSumBufferBuffer);
 			this->_globalSumBufferBufferMemory = std::move(other_._globalSumBufferBufferMemory);
 			this->_reductionResultBuffer = std::move(other_._reductionResultBuffer);
@@ -579,6 +581,14 @@ public:
 		return this->_descriptorSetLayout;
 	}
 
+	/** @brief	Get the Vulkan buffer of GlobalSumBuffer.
+	  * 
+	  *			You may wish to insert buffer memory barriers for this buffer.
+	  */
+	const vk::raii::Buffer& globalSumBufferBuffer(void) const {
+		return this->_globalSumBufferBuffer;
+	}
+
 	/** @brief	Create the descriptor set layout.
 	  */
 	static vk::raii::DescriptorSetLayout createDescriptorSetLayout(const vk::raii::Device& device_) {
@@ -617,10 +627,15 @@ private:
 	vk::raii::Buffer _icpParametersBuffer{ nullptr };
 	jjyou::vk::VmaAllocation _icpParametersBufferMemory{ nullptr };
 	void* _icpParametersBufferMemoryMappedAddress = nullptr;
+	vk::DeviceSize _globalSumBufferSize = 0;
 	vk::raii::Buffer _globalSumBufferBuffer{ nullptr };
 	jjyou::vk::VmaAllocation _globalSumBufferBufferMemory{ nullptr };
 	vk::raii::Buffer _reductionResultBuffer{ nullptr };
 	jjyou::vk::VmaAllocation _reductionResultBufferMemory{ nullptr };
 	void* _reductionResultBufferMemoryMappedAddress = nullptr;
+
+	void _createUniformBufferBinding0(void);
+	void _createStorageBufferBinding1(void);
+	void _createStorageBufferBinding2(void);
 
 };

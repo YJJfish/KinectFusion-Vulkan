@@ -8,7 +8,7 @@
 
 Application::Application(void) :
 	_headlessMode(false),
-	_debugMode(true)
+	_debugMode(false)
 {
 	// Load dataset
 	/*this->_pDataLoader.reset(new VirtualDataLoader(
@@ -56,7 +56,7 @@ Application::Application(void) :
 		this->_pDataLoader->maxDepth(),
 		this->_pDataLoader->invalidDepth(),
 		jjyou::glsl::uvec3(512U, 512U, 512U),
-		0.02f
+		0.025f
 	));
 
 	// Init assets
@@ -65,6 +65,9 @@ Application::Application(void) :
 
 void Application::mainLoop(void) {
 	std::uint32_t resourceCycleCounter = 0;
+	bool firstFrame = true;
+	jjyou::glsl::mat4 lastFrameView{};
+	jjyou::glsl::mat4 currFrameView{};
 	FrameData frameData{};
 	std::chrono::steady_clock::time_point timer{};
 	std::uint32_t numFramesSinceLastTimer = 0U;
@@ -148,11 +151,29 @@ void Application::mainLoop(void) {
 				{ {frameData.colorMap, frameData.depthMap} },
 				false
 			);
+			// Estimate the camera pose
+			if (!firstFrame) {
+				std::optional<jjyou::glsl::mat4> estimatedView = this->_pKinectFusion->estimatePose(
+					this->_inputMaps[resourceCycleCounter],
+					frameData.camera,
+					lastFrameView,
+					0.5f,
+					0.5f,
+					5,
+					0.1f,
+					0.9f
+				);
+				if (estimatedView.has_value())
+					currFrameView = *estimatedView;
+			}
+			else {
+				currFrameView = this->_pDataLoader->initialPose();
+			}
 			// Fuse the new frame
 			this->_pKinectFusion->fuse(
 				this->_inputMaps[resourceCycleCounter],
 				frameData.camera,
-				*frameData.view
+				currFrameView
 			);
 		}
 
@@ -166,7 +187,7 @@ void Application::mainLoop(void) {
 		if (ui.visualization.trackCamera || ui.visualization.displayInputFrames) {
 			this->_pEngine->setCameraMode(
 				Window::CameraMode::Fixed,
-				*frameData.view,
+				currFrameView,
 				frameData.camera
 			);
 		}
@@ -224,9 +245,9 @@ void Application::mainLoop(void) {
 
 		// Draw camera space axis and camera space
 		if (!ui.visualization.trackCamera && !ui.visualization.displayInputFrames) {
-			this->_pEngine->drawPrimitives(this->_axis, jjyou::glsl::inverse(*frameData.view) * jjyou::glsl::mat4(jjyou::glsl::mat3(0.2f)));
+			this->_pEngine->drawPrimitives(this->_axis, jjyou::glsl::inverse(currFrameView) * jjyou::glsl::mat4(jjyou::glsl::mat3(0.2f)));
 			this->_updateCameraFrame(this->_cameraFrames[resourceCycleCounter], frameData.camera);
-			this->_pEngine->drawPrimitives(this->_cameraFrames[resourceCycleCounter], jjyou::glsl::inverse(*frameData.view) * jjyou::glsl::mat4(jjyou::glsl::mat3(0.2f)));
+			this->_pEngine->drawPrimitives(this->_cameraFrames[resourceCycleCounter], jjyou::glsl::inverse(currFrameView) * jjyou::glsl::mat4(jjyou::glsl::mat3(0.2f)));
 		}
 
 		// Record command buffer and present frame.
@@ -234,6 +255,8 @@ void Application::mainLoop(void) {
 		this->_pEngine->presentFrame();
 		this->_pEngine->window().pollEvents();
 		resourceCycleCounter = (resourceCycleCounter + 1) % Engine::NUM_FRAMES_IN_FLIGHT;
+		firstFrame = false;
+		lastFrameView = currFrameView;
 	}
 }
 

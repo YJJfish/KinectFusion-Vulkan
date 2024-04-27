@@ -192,7 +192,9 @@ private:
 	vk::raii::PipelineLayout _rayCastingPipelineLayout{ nullptr };
 	vk::raii::PipelineLayout _fusionPipelineLayout{ nullptr };
 	vk::raii::PipelineLayout _bilateralFilteringPipelineLayout{ nullptr };
+	vk::raii::PipelineLayout _rayCastingICPPipelineLayout{ nullptr };
 	vk::raii::PipelineLayout _computeVertexNormalMapPipelineLayout{ nullptr };
+	vk::raii::PipelineLayout _halfSamplingPipelineLayout{ nullptr };
 	vk::raii::PipelineLayout _buildLinearFunctionPipelineLayout{ nullptr };
 	vk::raii::PipelineLayout _buildLinearFunctionReductionPipelineLayout{ nullptr };
 	vk::raii::Pipeline _initVolumePipeline{ nullptr };
@@ -202,32 +204,38 @@ private:
 	vk::raii::Pipeline _rayCastingICPPipeline{ nullptr };
 	vk::raii::Pipeline _computeVertexMapPipeline{ nullptr };
 	vk::raii::Pipeline _computeNormalMapPipeline{ nullptr };
+	vk::raii::Pipeline _halfSamplingPipeline{ nullptr };
 	vk::raii::Pipeline _buildLinearFunctionPipeline{ nullptr };
 	vk::raii::Pipeline _buildLinearFunctionReductionPipeline{ nullptr };
 
 	struct _InitVolumeAlgorithmData {
 		vk::raii::CommandBuffer commandBuffer{ nullptr };
 		vk::raii::Fence fence{ nullptr };
-		vk::SubmitInfo submitInfo{};
 	} _initVolumeAlgorithmData{};
 
 	struct _RayCastingAlgorithmData {
 		RayCastingDescriptorSet descriptorSet{ nullptr };
 		vk::raii::CommandBuffer commandBuffer{ nullptr };
 		vk::raii::Fence fence{ nullptr };
-		vk::SubmitInfo submitInfo{};
 	} _rayCastingAlgorithmData{};
 
 	struct _FusionAlgorithmData {
 		FusionDescriptorSet descriptorSet{ nullptr };
 		vk::raii::CommandBuffer commandBuffer{ nullptr };
 		vk::raii::Fence fence{ nullptr };
-		vk::SubmitInfo submitInfo{};
 	} _fusionAlgorithmData{};
 
 	struct _PoseEstimationAlgorithmData {
-		std::array<PyramidData, KinectFusion::NUM_PYRAMID_LEVELS> modelPyramid{ {PyramidData{nullptr}, PyramidData{nullptr}, PyramidData{nullptr}} };
 		std::array<PyramidData, KinectFusion::NUM_PYRAMID_LEVELS> framePyramid{ {PyramidData{nullptr}, PyramidData{nullptr}, PyramidData{nullptr}} };
+		std::array<PyramidData, KinectFusion::NUM_PYRAMID_LEVELS> modelPyramid{ {PyramidData{nullptr}, PyramidData{nullptr}, PyramidData{nullptr}} };
+		vk::raii::CommandBuffer buildPyramidCommandBuffer{ nullptr };
+		vk::raii::Fence buildPyramidFence{ nullptr };
+		std::array<RayCastingDescriptorSet, KinectFusion::NUM_PYRAMID_LEVELS> rayCastingDescriptorSets{ { RayCastingDescriptorSet{nullptr}, RayCastingDescriptorSet{nullptr}, RayCastingDescriptorSet{nullptr} } };
+		vk::raii::CommandBuffer rayCastingCommandBuffer{ nullptr };
+		vk::raii::Fence rayCastingFence{ nullptr };
+		ICPDescriptorSet icpDescriptorSet{ nullptr };
+		vk::raii::CommandBuffer icpCommandBuffer{ nullptr };
+		vk::raii::Fence icpFence{ nullptr };
 	} _poseEstimationAlgorithmData{};
 
 	void _createDescriptorSetLayouts(void);
@@ -245,10 +253,26 @@ private:
 		float maxDepth;
 		float invalidDepth;
 	};
-
-	/** @brief	Push constants.
-	  */
+	struct _HalfSamplingParameters {
+		float sigmaColor;	//!< The sigma value controlling the color term in bilateral filtering.
+	};
 	struct _CameraIntrinsics {
 		float fx, fy, cx, cy;
 	};
+	struct _GlobalSumBufferLength {
+		std::uint32_t len;
+	};
+
+	/** @brief	Work group size (local size of compute shaders).
+	  */
+	static inline constexpr jjyou::glsl::uvec3 _initVolumeWorkGroupSize{ 32U, 32U, 1U };
+	static inline constexpr jjyou::glsl::uvec3 _rayCastingWorkGroupSize{ 32U, 32U, 1U };
+	static inline constexpr jjyou::glsl::uvec3 _fusionWorkGroupSize{ 32U, 32U, 1U };
+	static inline constexpr jjyou::glsl::uvec3 _bilateralFilteringWorkGroupSize{ 32U, 32U, 1U };
+	static inline constexpr jjyou::glsl::uvec3 _halfSamplingWorkGroupSize{ 32U, 32U, 1U };
+	static inline constexpr jjyou::glsl::uvec3 _computeVertexMapWorkGroupSize{ 32U, 32U, 1U };
+	static inline constexpr jjyou::glsl::uvec3 _computeNormalMapWorkGroupSize{ 32U, 32U, 1U };
+	static inline constexpr jjyou::glsl::uvec3 _rayCastingICPWorkGroupSize{ 32U, 32U, 1U };
+	static inline constexpr jjyou::glsl::uvec3 _buildLinearFunctionWorkGroupSize{ 32U, 32U, 1U };
+	static inline constexpr jjyou::glsl::uvec3 _buildLinearFunctionReductionWorkGroupSize{ 1024U, 1U, 1U };
 };

@@ -28,6 +28,7 @@ layout(set = 2, binding = 0) uniform ICPParameters {
 	float fx, fy, cx, cy;		//!< The camera projection parameters of the model data.
 	float distanceThreshold;	//!< Distance threshold used in projective correspondence search.
 	float angleThreshold;		//!< Angle threshold used in projective correspondence search.
+	uint level;					//!< Level of the pyramid.
 } icpParameters;
 
 /** @brief	Storage buffer to store the 6x6 matrix A and 6d vector b.
@@ -40,7 +41,6 @@ layout(set = 2, binding = 0) uniform ICPParameters {
   *			32x32 invocations (aka threads in CUDA).
   */
 layout(set = 2, binding = 1) buffer GlobalSumBuffer {
-	uint size;			//<! The length of the first dimension of data. Not used in this shader.
 	float data[][27];
 } globalSumBuffer;
 
