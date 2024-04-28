@@ -279,5 +279,57 @@ Surface<_materialType>& Surface<_materialType>::createTextures(
 	return *this;
 }
 
+template <MaterialType _materialType>
+Surface<_materialType>& Surface<_materialType>::connect(
+	const Surface<MaterialType::Simple>& color_,
+	const Surface<MaterialType::Lambertian>& depth_
+) requires (_materialType == MaterialType::Simple) {
+	std::array<vk::Sampler, Surface::numTextures> _samplers{ {
+		*color_._sampler, *depth_._sampler
+	} };
+	std::array<vk::ImageView, Surface::numTextures> _imageViews{ {
+		*color_._textures[0].imageView(), *depth_._textures[1].imageView()
+	} };
+	// Update sampler descriptor set
+	{
+		std::array<vk::DescriptorImageInfo, Surface::numTextures> descriptorImageInfos{};
+		std::array<vk::WriteDescriptorSet, Surface::numTextures> writeDescriptorSets{};
+		for (std::uint32_t i = 0; i < Surface::numTextures; ++i) {
+			descriptorImageInfos[i]
+				.setSampler(_samplers[i])
+				.setImageView(_imageViews[i])
+				.setImageLayout(vk::ImageLayout::eGeneral);
+			writeDescriptorSets[i]
+				.setDstSet(*this->_samplerDescriptorSet)
+				.setDstBinding(i)
+				.setDstArrayElement(0)
+				.setDescriptorCount(1)
+				.setDescriptorType(vk::DescriptorType::eCombinedImageSampler)
+				.setImageInfo(descriptorImageInfos[i]);
+		}
+		this->_pEngine->context().device().updateDescriptorSets(writeDescriptorSets, nullptr);
+	}
+	// Update storage descriptor set
+	{
+		std::array<vk::DescriptorImageInfo, Surface::numTextures> descriptorImageInfos{};
+		std::array<vk::WriteDescriptorSet, Surface::numTextures> writeDescriptorSets{};
+		for (std::uint32_t i = 0; i < Surface::numTextures; ++i) {
+			descriptorImageInfos[i]
+				.setSampler(nullptr)
+				.setImageView(_imageViews[i])
+				.setImageLayout(vk::ImageLayout::eGeneral);
+			writeDescriptorSets[i]
+				.setDstSet(*this->_storageDescriptorSet)
+				.setDstBinding(i)
+				.setDstArrayElement(0)
+				.setDescriptorCount(1)
+				.setDescriptorType(vk::DescriptorType::eStorageImage)
+				.setImageInfo(descriptorImageInfos[i]);
+		}
+		this->_pEngine->context().device().updateDescriptorSets(writeDescriptorSets, nullptr);
+	}
+	return *this;
+}
+
 template class Surface<MaterialType::Simple>;
 template class Surface<MaterialType::Lambertian>;

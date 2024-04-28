@@ -54,6 +54,7 @@ target_include_directories(KinectFusion-Vulkan PUBLIC
 	./dep/VulkanMemoryAllocator/include/
 	./dep/jjyouLib/include/
 	./dep/stb/
+	./dep/stb/argparse/include/
 )
 target_link_libraries(KinectFusion-Vulkan
 	${Vulkan_LIBRARIES}

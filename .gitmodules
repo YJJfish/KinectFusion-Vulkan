@@ -16,3 +16,6 @@
 [submodule "dep/stb"]
 	path = dep/stb
 	url = https://github.com/nothings/stb.git
+[submodule "dep/argparse"]
+	path = dep/argparse
+	url = https://github.com/p-ranav/argparse.git

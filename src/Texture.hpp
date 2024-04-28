@@ -189,6 +189,19 @@ public:
 		bool waitIdle_
 	);
 
+	/** @brief	Combine multiple surfaces into one descriptor set.
+	  * 
+	  * This function will update the descriptor set using the 3 input surfaces.
+	  * This would be useful if you want to render color & depth & normal maps from
+	  * different surfaces, without performing memory copy.
+	  * If any of the connected surfaces is recreated or destroyed, the connection
+	  * will become invalid and you need to manually connect them again.
+	  */
+	Surface& connect(
+		const Surface<MaterialType::Simple>& color_,
+		const Surface<MaterialType::Lambertian>& depth_
+	) requires (_materialType == MaterialType::Simple);
+
 	/** @brief	Bind the sampler descriptor set.
 	  */
 	void bindSampler(
@@ -280,5 +293,8 @@ private:
 	vk::raii::Sampler _sampler{ nullptr };
 	vk::raii::DescriptorSet _samplerDescriptorSet{ nullptr };
 	vk::raii::DescriptorSet _storageDescriptorSet{ nullptr };
+
+	template <MaterialType __materialType>
+	friend class Surface;
 	
 };

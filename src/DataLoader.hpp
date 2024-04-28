@@ -14,7 +14,7 @@
  ***********************************************************************/
 enum class FrameState {
 	Valid,		/**< A valid frame. */
-	Invalid,	/**< An invalid frame. Should not be used for fusion. */
+	Invalid,	/**< An invalid frame. The fusion will skip this frame. */
 	Eof			/**< Sensor closed / Dataset reached the end. No more new frames. */
 };
 
@@ -45,7 +45,7 @@ struct FrameData {
 	std::uint32_t frameIndex = 0U;
 	const ColorPixel* colorMap = nullptr; // The memory should be valid until next `getFrame` call.
 	const DepthPixel* depthMap = nullptr; // The memory should be valid until next `getFrame` call.
-	Camera camera{};
+	Camera camera{};	// Camera intrinsics parameters for the depth data.
 	std::optional<jjyou::glsl::mat4> view = std::nullopt; // Optional ground truth view matrix that transforms objects from world space to camera space.
 };
 
@@ -69,15 +69,15 @@ struct FrameData {
  * The user may use different sensors' data as input, and different sensors use different
  * conventions for invalid depth measurement. For example, some use 0 as invalid measurement,
  * while some use a very large depth value as invalid measurement.
- * To address this, the dataloader should tell `minDepth`, `maxDepth`, and `invalidDepth`.
- * The depth values in a depth map are considered to be valid only if they are within
- * [minDepth, maxDepth] \ {invalidDepth}. Invalid depth values will not be used during
+ * To address this, the data loader should tell `minDepth`, `maxDepth`, and `invalidDepth`.
+ * The depth values in a depth map are considered valid only if they are within
+ * [minDepth, maxDepth] \ {invalidDepth}. Invalid depth values will not be used for
  * pose estimation and fusion.
  * For example, if your sensor uses 0 as invalid measurement, you can set `invalidDepth=0`,
  * `minDepth=0`, and `maxDepth=1e100`.
  * If your sensor uses a large value like 1000 as invalid measurement, you can set `invalidDepth=1000`,
- * `minDepth=0`, and `maxDepth=1e100`.
- * If you think depth measurements only within a specific range like [0.4, 8] are accurate,
+ * `minDepth=0`, and `maxDepth=1000`.
+ * If you think depth measurements within only a specific range like [0.4, 8] are accurate,
  * you can set `invalidDepth=-1`, `minDepth=0.4`, and `maxDepth=8`.
  * If your data are synthesized by a graphics rasterization pipeline, which means all depth
  * values within the clipped depth range [zNear, zFar) are accurate, you can set `invalidDepth=zFar`,
@@ -213,77 +213,63 @@ private:
 };
 
 /***********************************************************************
- * @class	ImageFolder
- * @brief	Data loader that loads color / depth images from the disk.
- * 
- * This data loader loads color and depth images from two folders. Images
- * will be read in alphabetical order according to their file names.
- * This class makes the following assumptions:
- *  - There are only images in the folders.
- *  - Color and depth images match with each other, in alphabetical order.
- *  - All color images have the same size. All depth images have the same size.
- *  - Intrinsics parameters are fixed, passed to the loader at construction time.
- *  - Extrinsics parameters can optionally be passed to the loader at construction time.
- * Feel free to copy this class' code to implement your data loader.
+ * @class	TUMDataset
+ * @brief	Data loader that loads the TUM RGBD dataset from the disk.
+ * @sa		https://cvg.cit.tum.de/data/datasets/rgbd-dataset/download
  ***********************************************************************/
-class ImageFolder : public DataLoader {
+class TUMDataset : public DataLoader {
 
 public:
 
 	/** @brief	Constructor.
-	  * @param	colorFolder_	Path to the folder of color images.
-	  * @param	depthFolder_	Path to the folder of depth images.
-	  * @param	depthScale_		Scale factor to apply to the depth images.
-	  *							For 8 bit images, the final depth value will be `pixel / 255.0f * depthScale_`.
-	  *							For 16 bit images, the final depth value will be `pixel / 65535.0f * depthScale_`.
-	  * @param	camera_			Camera instance. This data loader uses fixed camera intrinsics.
-	  * @param	views_			4x4 ground truth camera view matrices that transforms objects in world space to camera space.
+	  * @param	path_		Path to the folder of the dataset.
+	  * 
+	  *	In the folder there should be a "rgb" folder containing all RGB images,
+	  * a "depth" folder containing all depth images, a "rgb.txt" file containing the
+	  * names of RGB images, a "depth.txt" file containing the names of depth images,
+	  * a "groundtruth.txt" file containing the groundtruth trajectory data,
+	  * and an "accelerometer.txt" file containing the inertial data (not used).
+	  * The timestamps of RGB images, depth images, and groundtruth trajectories
+	  * may not match. They are grouped by nearest search on timestamps.
 	  */
-	ImageFolder(
-		const std::filesystem::path& colorFolder_,
-		const std::filesystem::path& depthFolder_,
-		float depthScale_,
-		const Camera& camera_,
-		std::optional<std::vector<jjyou::glsl::mat4>> views_,
-		float minDepth_,
-		float maxDepth_,
-		float invalidDepth_
+	TUMDataset(
+		const std::filesystem::path& path_
 	);
 
 	/** @brief	Disable copy/move constructor/assignment.
 	  */
-	ImageFolder(const ImageFolder&) = delete;
-	ImageFolder(ImageFolder&&) = delete;
-	ImageFolder& operator=(const ImageFolder&) = delete;
-	ImageFolder& operator=(ImageFolder&&) = delete;
+	TUMDataset(const TUMDataset&) = delete;
+	TUMDataset(TUMDataset&&) = delete;
+	TUMDataset& operator=(const TUMDataset&) = delete;
+	TUMDataset& operator=(TUMDataset&&) = delete;
 
 	/** @brief	Destructor.
 	  */
-	virtual ~ImageFolder(void) override {}
+	virtual ~TUMDataset(void) override {}
 
 	/** @brief	Get the size of input color frames.
 	  */
-	virtual vk::Extent2D colorFrameExtent(void) override { return this->_colorFrameExtent; }
+	virtual vk::Extent2D colorFrameExtent(void) override { return vk::Extent2D(640U, 480U); }
 
 	/** @brief	Get the size of input depth frames.
 	  */
-	virtual vk::Extent2D depthFrameExtent(void) override { return this->_depthFrameExtent; }
+	virtual vk::Extent2D depthFrameExtent(void) override { return vk::Extent2D(640U, 480U); }
 
 	/** @brief	Get the lower bound of valid depth.
 	  */
-	virtual float minDepth(void) override { return 0.1f; }
+	virtual float minDepth(void) override { return 0.01f; }
 
 	/** @brief	Get the upper bound of valid depth.
 	  */
-	virtual float maxDepth(void) override { return 10.0f; }
+	virtual float maxDepth(void) override { return 100.0f; }
 
 	/** @brief	Get the invalid depth value.
 	  */
-	virtual float invalidDepth(void) override { return this->maxDepth(); }
+	virtual float invalidDepth(void) override { return 0.0f; }
 
 	/** @brief	Get the initial pose for the first frame.
 	  */
-	virtual jjyou::glsl::mat4 initialPose(void) override { return this->_views.has_value() ? (*this->_views)[0] : jjyou::glsl::mat4(1.0f); }
+	virtual jjyou::glsl::mat4 initialPose(void) override { return this->_views[0]; }
 
 	/** @brief	Get a new frame.
 	  */
@@ -293,14 +279,8 @@ private:
 
 	std::vector<std::filesystem::path> _colorFrameNames{};
 	std::vector<std::filesystem::path> _depthFrameNames{};
-	float _depthScale = 0.0f;
+	std::vector<jjyou::glsl::mat4> _views{};
 	Camera _camera{};
-	std::optional<std::vector<jjyou::glsl::mat4>> _views = std::nullopt;
-	vk::Extent2D _colorFrameExtent;
-	vk::Extent2D _depthFrameExtent;
-	float _minDepth = 0.0f;
-	float _maxDepth = 100.0f;
-	float _invalidDepth = 0.0f;
 	std::uint32_t _frameIndex = 0;
 	std::unique_ptr<FrameData::ColorPixel[]> _colorMap{};
 	std::unique_ptr<FrameData::DepthPixel[]> _depthMap{};

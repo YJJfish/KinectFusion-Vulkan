@@ -117,8 +117,8 @@ public:
 	  * @param	sigmaColor_			Bilateral filtering parameter.
 	  * @param	sigmaSpace_			Bilateral filtering parameter.
 	  * @param	filterKernelSize_	Bilateral filtering kernel size. Must be an odd number.
-	  * @param	distanceThreshold_	Distance threshold used in projective correspondence search.
-	  * @param	angleThreshold_		Angle threshold used in projective correspondence search.
+	  * @param	distanceThreshold_	Distance threshold used in projective correspondence search. In meters.
+	  * @param	angleThreshold_		Angle threshold used in projective correspondence search. In radians.
 	  * @return	The esimated view matrix for the frame. If the ICP failed, std::nullopt will be returned.
 	  */
 	std::optional<jjyou::glsl::mat4> estimatePose(

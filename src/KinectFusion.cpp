@@ -135,6 +135,7 @@ std::optional<jjyou::glsl::mat4> KinectFusion::estimatePose(
 	float distanceThreshold_,
 	float angleThreshold_
 ) const {
+	angleThreshold_ = std::cos(angleThreshold_);
 	vk::Result waitResult{};
 	// Prepare memory barriers for sychronizaton use.
 	vk::BufferMemoryBarrier readAfterWriteBufferMemoryBarrier = vk::BufferMemoryBarrier()
@@ -294,8 +295,8 @@ std::optional<jjyou::glsl::mat4> KinectFusion::estimatePose(
 	const ICPDescriptorSet& icpDescriptorSet = this->_poseEstimationAlgorithmData.icpDescriptorSet;
 	const vk::raii::CommandBuffer& icpCommandBuffer = this->_poseEstimationAlgorithmData.icpCommandBuffer;
 	const vk::raii::Fence& icpFence = this->_poseEstimationAlgorithmData.icpFence;
-	jjyou::glsl::mat4 estimatedInvView = jjyou::glsl::inverse(initialView_);
-	Eigen::Map<Eigen::Matrix4f> estimatedInvViewEigen(estimatedInvView.data.data());
+	jjyou::glsl::dmat4 estimatedInvView = jjyou::glsl::inverse(initialView_).cast<double>();
+	Eigen::Map<Eigen::Matrix4d> estimatedInvViewEigen(estimatedInvView.data.data());
 	// Starting with the coarsest level.
 	for (std::uint32_t reverseLevel = 0; reverseLevel < KinectFusion::NUM_PYRAMID_LEVELS; ++reverseLevel) {
 		std::uint32_t level = KinectFusion::NUM_PYRAMID_LEVELS - 1U - reverseLevel;
@@ -319,7 +320,7 @@ std::optional<jjyou::glsl::mat4> KinectFusion::estimatePose(
 			);
 			framePyramid[level].bind(icpCommandBuffer, vk::PipelineBindPoint::eCompute, this->_buildLinearFunctionPipelineLayout, 0);
 			modelPyramid[level].bind(icpCommandBuffer, vk::PipelineBindPoint::eCompute, this->_buildLinearFunctionPipelineLayout, 1);
-			icpDescriptorSet.icpParameters().frameInvView = estimatedInvView;
+			icpDescriptorSet.icpParameters().frameInvView = estimatedInvView.cast<float>();
 			icpDescriptorSet.bind(icpCommandBuffer, vk::PipelineBindPoint::eCompute, this->_buildLinearFunctionPipelineLayout, 2);
 			icpCommandBuffer.bindPipeline(vk::PipelineBindPoint::eCompute, *this->_buildLinearFunctionPipeline);
 			jjyou::glsl::uvec3 numWorkGroups(
@@ -365,23 +366,28 @@ std::optional<jjyou::glsl::mat4> KinectFusion::estimatePose(
 					++counter;
 				}
 			}
-			// Solve the function
-			float det = A.determinant();
-			if (std::isnan(det) || std::abs(det) < 100000.0f)
+			Eigen::Matrix<double, 6, 6> _A = A.cast<double>();
+			Eigen::Vector<double, 6> _b = b.cast<double>();
+			// Solve the function. We use 64-bit double for higher precision.
+			double detA = _A.determinant();
+			if (std::isnan(detA) || std::abs(detA) < 50000.0)
 				return std::nullopt;
-			Eigen::Matrix<float, 6, 1> x{ A.fullPivLu().solve(b).cast<float>() };
-			Eigen::Quaternionf rotation =
-				Eigen::AngleAxisf(x(2), Eigen::Vector3f::UnitZ()) *
-				Eigen::AngleAxisf(x(1), Eigen::Vector3f::UnitY()) *
-				Eigen::AngleAxisf(x(0), Eigen::Vector3f::UnitX());
-			Eigen::Vector3f translation = x.tail<3>();
-			Eigen::Matrix4f deltaTransform = Eigen::Matrix4f::Identity();
+			Eigen::Vector<double, 6> x = _A.ldlt().solve(_b);
+			double normX = x.norm();
+			if (normX > 0.15)
+				return std::nullopt;
+			Eigen::Quaterniond rotation =
+				Eigen::AngleAxisd(x(2), Eigen::Vector3d::UnitZ()) *
+				Eigen::AngleAxisd(x(1), Eigen::Vector3d::UnitY()) *
+				Eigen::AngleAxisd(x(0), Eigen::Vector3d::UnitX());
+			Eigen::Vector3d translation = x.tail<3>();
+			Eigen::Matrix4d deltaTransform = Eigen::Matrix4d::Identity();
 			deltaTransform.topLeftCorner<3, 3>() = rotation.matrix();
 			deltaTransform.topRightCorner<3, 1>() = translation;
 			estimatedInvViewEigen = deltaTransform * estimatedInvViewEigen;
 		}
 	}
-	return jjyou::glsl::inverse(estimatedInvView);
+	return jjyou::glsl::inverse(estimatedInvView.cast<float>());
 }
 
 void KinectFusion::fuse(

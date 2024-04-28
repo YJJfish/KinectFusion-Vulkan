@@ -2,6 +2,7 @@
 #include <exception>
 #include <stdexcept>
 #include <numbers>
+#include <fstream>
 #include <stb_image.h>
 
 VirtualDataLoader::VirtualDataLoader(
@@ -77,61 +78,129 @@ FrameData VirtualDataLoader::getFrame(void) {
 	return res;
 }
 
-ImageFolder::ImageFolder(
-	const std::filesystem::path& colorFolder_,
-	const std::filesystem::path& depthFolder_,
-	float depthScale_,
-	const Camera& camera_,
-	std::optional<std::vector<jjyou::glsl::mat4>> views_,
-	float minDepth_,
-	float maxDepth_,
-	float invalidDepth_
+TUMDataset::TUMDataset(
+	const std::filesystem::path& path_
 ) :
-	DataLoader(),
-	_colorFrameNames(),
-	_depthFrameNames(),
-	_depthScale(depthScale_),
-	_camera(camera_),
-	_views(std::move(views_)),
-	_colorFrameExtent(),
-	_depthFrameExtent(),
-	_minDepth(minDepth_),
-	_maxDepth(maxDepth_),
-	_invalidDepth(invalidDepth_),
-	_frameIndex(0),
-	_colorMap(),
-	_depthMap()
+	DataLoader()
 {
-	for (const auto& entry : std::filesystem::directory_iterator(colorFolder_))
-		this->_colorFrameNames.push_back(entry.path());
-	for (const auto& entry : std::filesystem::directory_iterator(depthFolder_))
-		this->_depthFrameNames.push_back(entry.path());
-	if (this->_colorFrameNames.empty())
-		throw std::runtime_error("[ImageFolder] Color image folder is empty.");
-	if (this->_colorFrameNames.size() != this->_depthFrameNames.size())
-		throw std::runtime_error("[ImageFolder] The number of color frames does not equal to that of depth frames.");
-	if (this->_views.has_value() && this->_views->size() != this->_colorFrameNames.size())
-		throw std::runtime_error("[ImageFolder] The number of view matrices does not equal to that of color frames.");
-	std::sort(this->_colorFrameNames.begin(), this->_colorFrameNames.end());
-	std::sort(this->_depthFrameNames.begin(), this->_depthFrameNames.end());
-	// Load the first frame and extract image sizes.
-	{
-		int colorExtentX{}, colorExtentY{}, colorChannel{};
-		int result = stbi_info(this->_colorFrameNames.front().string().c_str(), &colorExtentX, &colorExtentY, &colorChannel);
-		if (result == 0) throw std::runtime_error("[ImageFolder] Failed to load " + this->_colorFrameNames.front().string() + ".");
-		this->_colorFrameExtent = vk::Extent2D(static_cast<std::uint32_t>(colorExtentX), static_cast<std::uint32_t>(colorExtentY));
-		this->_colorMap.reset(new FrameData::ColorPixel[this->_colorFrameExtent.width * this->_colorFrameExtent.height]{});
+	// https://cvg.cit.tum.de/data/datasets/rgbd-dataset/file_formats
+	this->_camera = Camera::fromVision(
+		525.0f,
+		525.0f,
+		319.5f,
+		239.5f,
+		this->minDepth(),
+		this->maxDepth(),
+		this->depthFrameExtent().width,
+		this->depthFrameExtent().height
+	);
+	this->_colorMap.reset(new FrameData::ColorPixel[this->colorFrameExtent().width * this->colorFrameExtent().height]{});
+	this->_depthMap.reset(new FrameData::DepthPixel[this->depthFrameExtent().width * this->depthFrameExtent().height]{});
+	std::ifstream inputFile;
+	std::string inputBuffer;
+	std::stringstream lineStream;
+	// Read RGB image names and timestamps.
+	std::vector<double> rgbTimestamps;
+	std::vector<std::filesystem::path> rgbImageNames;
+	inputFile.open(path_ / "rgb.txt", std::ios::in);
+	if (!inputFile.is_open())
+		throw std::runtime_error("[TUMDataset] Cannot open " + (path_ / "rgb.txt").string() + ".");
+	while (std::getline(inputFile, inputBuffer)) {
+		if (inputBuffer.empty() || inputBuffer.front() == '#')
+			continue;
+		lineStream.clear();
+		lineStream << inputBuffer;
+		double rgbTimestamp{};
+		std::string rgbImageName;
+		lineStream >> rgbTimestamp >> rgbImageName;
+		rgbTimestamps.push_back(rgbTimestamp);
+		rgbImageNames.emplace_back(rgbImageName);
 	}
-	{
-		int depthExtentX{}, depthExtentY{}, depthChannel{};
-		int result = stbi_info(this->_depthFrameNames.front().string().c_str(), &depthExtentX, &depthExtentY, &depthChannel);
-		if (result == 0) throw std::runtime_error("[ImageFolder] Failed to load " + this->_depthFrameNames.front().string() + ".");
-		this->_depthFrameExtent = vk::Extent2D(static_cast<std::uint32_t>(depthExtentX), static_cast<std::uint32_t>(depthExtentY));
-		this->_depthMap.reset(new FrameData::DepthPixel[this->_depthFrameExtent.width * this->_depthFrameExtent.height]{});
+	inputFile.close();
+	if (rgbImageNames.empty())
+		throw std::runtime_error("[TUMDataset] No rgb data in " + (path_ / "rgb.txt").string() + ".");
+	// Read depth image names and timestamps.
+	std::vector<double> depthTimestamps;
+	std::vector<std::filesystem::path> depthImageNames;
+	inputFile.open(path_ / "depth.txt", std::ios::in);
+	if (!inputFile.is_open())
+		throw std::runtime_error("[TUMDataset] Cannot open " + (path_ / "depth.txt").string() + ".");
+	while (std::getline(inputFile, inputBuffer)) {
+		if (inputBuffer.empty() || inputBuffer.front() == '#')
+			continue;
+		lineStream.clear();
+		lineStream << inputBuffer;
+		double depthTimestamp{};
+		std::string depthImageName;
+		lineStream >> depthTimestamp >> depthImageName;
+		depthTimestamps.push_back(depthTimestamp);
+		depthImageNames.emplace_back(depthImageName);
+	}
+	inputFile.close();
+	if (depthImageNames.empty())
+		throw std::runtime_error("[TUMDataset] No depth data in " + (path_ / "depth.txt").string() + ".");
+	// Read groundtruth trajectory data and timestamps.
+	std::vector<double> groundtruthTimestamps;
+	std::vector<jjyou::glsl::mat4> groundtruthViews;
+	inputFile.open(path_ / "groundtruth.txt", std::ios::in);
+	if (!inputFile.is_open())
+		throw std::runtime_error("[TUMDataset] Cannot open " + (path_ / "groundtruth.txt").string() + ".");
+	jjyou::glsl::mat4 transform(
+		0.0f, 0.0f, -1.0f, 0.0f,
+		1.0f, 0.0f, 0.0f, 0.0f,
+		0.0f, -1.0f, 0.0f, 0.0f,
+		0.0f, 0.0f, 0.0f, 1.0f
+	);
+	while (std::getline(inputFile, inputBuffer)) {
+		if (inputBuffer.empty() || inputBuffer.front() == '#')
+			continue;
+		lineStream.clear();
+		lineStream << inputBuffer;
+		double groundtruthTimestamp{};
+		jjyou::glsl::vec3 t;
+		jjyou::glsl::quat q;
+		lineStream >> groundtruthTimestamp >> t.x >> t.y >> t.z >> q.x >> q.y >> q.z >> q.w;
+		groundtruthTimestamps.push_back(groundtruthTimestamp);
+		jjyou::glsl::mat4 view = jjyou::glsl::mat3(q);
+		view[3] = jjyou::glsl::vec4(t, 1.0f);
+		view = jjyou::glsl::inverse(transform * view);
+		groundtruthViews.emplace_back(view);
+	}
+	inputFile.close();
+	if (groundtruthViews.empty())
+		throw std::runtime_error("[TUMDataset] No groundtruth data in " + (path_ / "groundtruth.txt").string() + ".");
+	// Match depth images with RGB images and groundtruth poses.
+	this->_colorFrameNames.reserve(depthImageNames.size());
+	std::size_t rgbCounter = 0;
+	this->_depthFrameNames.reserve(depthImageNames.size());
+	this->_views.reserve(depthImageNames.size());
+	std::size_t groundtruthCounter = 0;
+	for (std::size_t depthCounter = 0; depthCounter < depthImageNames.size(); ++depthCounter) {
+		double depthTimestamp = depthTimestamps[depthCounter];
+		this->_depthFrameNames.push_back(path_ / depthImageNames[depthCounter]);
+		while (rgbCounter + 1ULL < rgbImageNames.size() && rgbTimestamps[rgbCounter + 1ULL] < depthTimestamp)
+			++rgbCounter;
+		if (rgbCounter + 1ULL == rgbImageNames.size() ||
+			(std::abs(rgbTimestamps[rgbCounter] - depthTimestamp) < std::abs(rgbTimestamps[rgbCounter + 1ULL] - depthTimestamp))
+			) {
+			this->_colorFrameNames.push_back(path_ / rgbImageNames[rgbCounter]);
+		}
+		else {
+			this->_colorFrameNames.push_back(path_ / rgbImageNames[rgbCounter + 1ULL]);
+		}
+		while (groundtruthCounter + 1ULL < groundtruthViews.size() && groundtruthTimestamps[groundtruthCounter + 1ULL] < depthTimestamp)
+			++groundtruthCounter;
+		if (groundtruthCounter + 1ULL == groundtruthViews.size() ||
+			(std::abs(groundtruthTimestamps[groundtruthCounter] - depthTimestamp) < std::abs(groundtruthTimestamps[groundtruthCounter + 1ULL] - depthTimestamp))
+			) {
+			this->_views.push_back(groundtruthViews[groundtruthCounter]);
+		}
+		else {
+			this->_views.push_back(groundtruthViews[groundtruthCounter + 1ULL]);
+		}
 	}
 }
-
-FrameData ImageFolder::getFrame(void) {
+FrameData TUMDataset::getFrame(void) {
 	if (this->_frameIndex == static_cast<std::uint32_t>(this->_colorFrameNames.size())) {
 		FrameData res{};
 		res.state = FrameState::Eof;
@@ -140,8 +209,7 @@ FrameData ImageFolder::getFrame(void) {
 		res.colorMap = this->_colorMap.get();
 		res.depthMap = this->_depthMap.get();
 		res.camera = this->_camera;
-		if (this->_views.has_value())
-			res.view = this->_views->back();
+		res.view = this->_views.back();
 		return res;
 	}
 	FrameData res{};
@@ -150,36 +218,28 @@ FrameData ImageFolder::getFrame(void) {
 	res.colorMap = this->_colorMap.get();
 	res.depthMap = this->_depthMap.get();
 	res.camera = this->_camera;
-	if (this->_views.has_value())
-		res.view = (*this->_views)[this->_frameIndex];
+	res.view = this->_views[this->_frameIndex];
 	{
 		int colorExtentX{}, colorExtentY{}, colorChannel{};
 		std::uint8_t* colorPixels = stbi_load(this->_colorFrameNames[this->_frameIndex].string().c_str(), &colorExtentX, &colorExtentY, &colorChannel, STBI_rgb_alpha);
-		if (colorPixels == nullptr) throw std::runtime_error("[ImageFolder] Failed to load " + this->_colorFrameNames[this->_frameIndex].string() + ".");
-		if (static_cast<std::uint32_t>(colorExtentX) != this->_colorFrameExtent.width || static_cast<std::uint32_t>(colorExtentY) != this->_colorFrameExtent.height)
-			throw std::runtime_error("[ImageFolder] The size of image " + this->_colorFrameNames[this->_frameIndex].string() + " does not match.");
-		memcpy(this->_colorMap.get(), colorPixels, sizeof(FrameData::ColorPixel) * static_cast<std::size_t>(this->_colorFrameExtent.width) * static_cast<std::size_t>(this->_colorFrameExtent.height));
+		if (colorPixels == nullptr) throw std::runtime_error("[TUMDataset] Failed to load " + this->_colorFrameNames[this->_frameIndex].string() + ".");
+		if (static_cast<std::uint32_t>(colorExtentX) != this->colorFrameExtent().width || static_cast<std::uint32_t>(colorExtentY) != this->colorFrameExtent().height)
+			throw std::runtime_error("[TUMDataset] The size of image " + this->_colorFrameNames[this->_frameIndex].string() + " does not match.");
+		memcpy(this->_colorMap.get(), colorPixels, sizeof(FrameData::ColorPixel) * static_cast<std::size_t>(this->colorFrameExtent().width) * static_cast<std::size_t>(this->colorFrameExtent().height));
 		stbi_image_free(colorPixels);
 	}
 	if (stbi_is_16_bit(this->_depthFrameNames[this->_frameIndex].string().c_str())) {
 		int depthExtentX{}, depthExtentY{}, depthChannel{};
 		std::uint16_t* depthPixels = stbi_load_16(this->_depthFrameNames[this->_frameIndex].string().c_str(), &depthExtentX, &depthExtentY, &depthChannel, STBI_grey);
-		if (depthPixels == nullptr) throw std::runtime_error("[ImageFolder] Failed to load " + this->_depthFrameNames[this->_frameIndex].string() + ".");
-		if (static_cast<std::uint32_t>(depthExtentX) != this->_depthFrameExtent.width || static_cast<std::uint32_t>(depthExtentY) != this->_depthFrameExtent.height)
-			throw std::runtime_error("[ImageFolder] The size of image " + this->_depthFrameNames[this->_frameIndex].string() + " does not match.");
-		for (std::size_t i = 0; i < static_cast<std::size_t>(this->_depthFrameExtent.width) * static_cast<std::size_t>(this->_depthFrameExtent.height); ++i)
-			this->_depthMap[i] = static_cast<float>(depthPixels[i]) / 65535.0f * this->_depthScale;
+		if (depthPixels == nullptr) throw std::runtime_error("[TUMDataset] Failed to load " + this->_depthFrameNames[this->_frameIndex].string() + ".");
+		if (static_cast<std::uint32_t>(depthExtentX) != this->depthFrameExtent().width || static_cast<std::uint32_t>(depthExtentY) != this->depthFrameExtent().height)
+			throw std::runtime_error("[TUMDataset] The size of image " + this->_depthFrameNames[this->_frameIndex].string() + " does not match.");
+		for (std::size_t i = 0; i < static_cast<std::size_t>(this->depthFrameExtent().width) * static_cast<std::size_t>(this->depthFrameExtent().height); ++i)
+			this->_depthMap[i] = static_cast<float>(depthPixels[i]) / 5000.0f;
 		stbi_image_free(depthPixels);
 	}
 	else {
-		int depthExtentX{}, depthExtentY{}, depthChannel{};
-		std::uint8_t* depthPixels = stbi_load(this->_depthFrameNames[this->_frameIndex].string().c_str(), &depthExtentX, &depthExtentY, &depthChannel, STBI_grey);
-		if (depthPixels == nullptr) throw std::runtime_error("[ImageFolder] Failed to load " + this->_depthFrameNames[this->_frameIndex].string() + ".");
-		if (static_cast<std::uint32_t>(depthExtentX) != this->_depthFrameExtent.width || static_cast<std::uint32_t>(depthExtentY) != this->_depthFrameExtent.height)
-			throw std::runtime_error("[ImageFolder] The size of image " + this->_depthFrameNames[this->_frameIndex].string() + " does not match.");
-		for (std::size_t i = 0; i < static_cast<std::size_t>(this->_depthFrameExtent.width) * static_cast<std::size_t>(this->_depthFrameExtent.height); ++i)
-			this->_depthMap[i] = static_cast<float>(depthPixels[i]) / 255.0f * this->_depthScale;
-		stbi_image_free(depthPixels);
+		throw std::runtime_error("[TUMDataset] The image format of " + this->_depthFrameNames[this->_frameIndex].string() + " is not 16-bit.");
 	}
 	++this->_frameIndex;
 	return res;
