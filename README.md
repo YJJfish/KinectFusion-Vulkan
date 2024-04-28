@@ -55,11 +55,11 @@ The project is developed on Windows, and tested on Windows/Ubuntu/MacOS.
 
 The following table shows the FPS on different platforms:
 
-| Platform                                    | FPS   |
-| ------------------------------------------- | ----- |
-| Windows (NVIDIA Geforce RTX 2060)           | 30-40 |
-| Ubuntu（NVIDIA Geforce GTX 1080）           | 20-30 |
-| MacOS(Intel Iris Plus Graphics 640 1536 MB) | 5-10  |
+| Platform                             | FPS   |
+| ------------------------------------ | ----- |
+| Windows (NVIDIA Geforce RTX 2060)    | 30-40 |
+| Ubuntu (NVIDIA Geforce GTX 1080)     | 20-30 |
+| MacOS (Intel Iris Plus Graphics 640) | 5-10  |
 
 We show our results on [TUM RGB-D datasets](https://cvg.cit.tum.de/data/datasets/rgbd-dataset/download).
 
